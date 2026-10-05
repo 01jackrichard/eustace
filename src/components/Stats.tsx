@@ -14,36 +14,36 @@ interface StatsProps {
 export function Stats({ stats }: StatsProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-      <StatBox 
-        label="CURRENT STREAK" 
-        value={`${stats.currentStreak} days`} 
-        icon={<Flame size={14} className="text-orange-400" />} 
-        context={stats.currentStreak === 0 ? "Start your streak today" : "Keep the momentum going"} 
+      <StatBox
+        label="CURRENT STREAK"
+        value={`${stats.currentStreak} days`}
+        icon={<Flame size={14} className="text-orange-400" />}
+        context={stats.currentStreak === 0 ? "Start your streak today" : "Keep the momentum going"}
       />
-      <StatBox 
-        label="LONGEST STREAK" 
-        value={`${stats.longestStreak} days`} 
-        icon={<Trophy size={14} className="text-yellow-400" />} 
-        context="Personal record" 
+      <StatBox
+        label="LONGEST STREAK"
+        value={`${stats.longestStreak} days`}
+        icon={<Trophy size={14} className="text-yellow-400" />}
+        context="Personal record"
       />
-      <StatBox 
-        label="COMPLETED DAYS" 
-        value={`${stats.completedDays} / ${stats.daysInYear}`} 
-        icon={<CalendarCheck size={14} className="text-accent" />} 
-        context={`${new Date().getFullYear()} progress`} 
+      <StatBox
+        label="COMPLETED DAYS"
+        value={`${stats.completedDays} / ${stats.daysInYear}`}
+        icon={<CalendarCheck size={14} className="text-accent" />}
+        context={`${new Date().getFullYear()} progress`}
       />
-      <StatBox 
-        label="COMPLETION RATE" 
-        value={`${stats.completionRate.toFixed(1)}%`} 
-        icon={<BarChart3 size={14} className="text-blue-400" />} 
-        context="Yearly completion" 
+      <StatBox
+        label="COMPLETION RATE"
+        value={`${stats.completionRate.toFixed(1)}%`}
+        icon={<BarChart3 size={14} className="text-blue-400" />}
+        context="Yearly completion"
       />
-      <StatBox 
-        label="TASKS COMPLETED" 
-        value={`${stats.totalTasksCompleted}`} 
-        icon={<CheckSquare size={14} className="text-purple-400" />} 
-        context="Across all days" 
-        className="col-span-2 md:col-span-1" 
+      <StatBox
+        label="TASKS COMPLETED"
+        value={`${stats.totalTasksCompleted}`}
+        icon={<CheckSquare size={14} className="text-purple-400" />}
+        context="Across all days"
+        className="col-span-2 md:col-span-1"
       />
     </div>
   );

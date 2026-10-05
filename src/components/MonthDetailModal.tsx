@@ -15,10 +15,10 @@ interface MonthDetailModalProps {
 
 export function MonthDetailModal({ year, month, data, onDayClick, onClose }: MonthDetailModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
-  
+
   const monthStart = new Date(year, month, 1);
   const daysInMonth = getDaysInMonth(monthStart);
-  
+
   // Calculate month specific stats
   const monthPrefix = format(monthStart, 'yyyy-MM');
   let monthCompleted = 0;
@@ -51,14 +51,14 @@ export function MonthDetailModal({ year, month, data, onDayClick, onClose }: Mon
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
-      <div 
+      <div
         ref={modalRef}
         className="bg-surface border border-border rounded-2xl p-6 md:p-8 max-w-sm w-full shadow-2xl relative animate-pop"
         role="dialog"
         aria-modal="true"
         aria-labelledby="month-dialog-title"
       >
-        <button 
+        <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 text-textMuted hover:text-textMain bg-background hover:bg-surfaceHover rounded-full transition-colors"
           aria-label="Close dialog"
@@ -86,11 +86,11 @@ export function MonthDetailModal({ year, month, data, onDayClick, onClose }: Mon
         </div>
 
         <div className="flex justify-center bg-background border border-border/50 rounded-xl p-6">
-          <MonthCalendar 
-            year={year} 
-            month={month} 
-            data={data} 
-            onDayClick={onDayClick} 
+          <MonthCalendar
+            year={year}
+            month={month}
+            data={data}
+            onDayClick={onDayClick}
           />
         </div>
       </div>

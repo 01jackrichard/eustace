@@ -31,11 +31,11 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
     if (phase !== 'scramble') return;
 
     let iterations = 0;
-    const maxIterations = 20; 
+    const maxIterations = 20;
     const TARGET = (profile?.display_name || (profile?.display_name || profile?.full_name) || profile?.username || 'FRIEND').split(' ')[0].toUpperCase();
 
     const interval = setInterval(() => {
-      setScrambledText(() => 
+      setScrambledText(() =>
         TARGET.split('').map((_, i) => {
           if (iterations > maxIterations - 5 && i < (iterations - (maxIterations - 5)) * 2) {
             return TARGET[i];
@@ -43,7 +43,7 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
           return GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
         }).join('')
       );
-      
+
       iterations++;
       if (iterations >= maxIterations) {
         clearInterval(interval);
@@ -66,20 +66,20 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
   }, [phase]);
 
   const displayName = (profile?.display_name || (profile?.display_name || profile?.full_name) || profile?.username || 'FRIEND').split(' ')[0].toUpperCase();
-  
+
   const now = new Date();
   const dateString = format(now, 'dd MMM yyyy').toUpperCase();
   const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
   const isLeapYear = now.getFullYear() % 4 === 0 && (now.getFullYear() % 100 !== 0 || now.getFullYear() % 400 === 0);
 
   return (
-    <div 
+    <div
       className={cn(
         "relative w-full overflow-hidden transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)]",
         phase === 'profile' ? "h-[65vh] min-h-[500px]" : "h-[85vh] min-h-[600px] mb-8"
       )}
     >
-      <div 
+      <div
         className="absolute inset-0 bg-[#0a0a0a] border border-white/5 rounded-[2rem] overflow-hidden group cursor-pointer"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -102,7 +102,7 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
         {/* TINY METADATA */}
         <AnimatePresence>
           {(phase === 'initial' || phase === 'scramble') && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="absolute inset-0 pointer-events-none z-10"
             >
@@ -124,24 +124,24 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
         </AnimatePresence>
 
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6">
-          
+
           {/* PHASE: INITIAL & SCRAMBLE */}
           <AnimatePresence>
             {(phase === 'initial' || phase === 'scramble') && (
-              <motion.div 
+              <motion.div
                 className="absolute inset-0 flex items-center justify-center pointer-events-none"
                 exit={{ opacity: 0, scale: 0.95, filter: 'blur(10px)' }}
                 transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
               >
-                <h1 
+                <h1
                   className={cn(
                     "text-white mix-blend-plus-lighter whitespace-nowrap transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
                     isHovered && phase === 'initial' ? "blur-[1.5px] opacity-90 scale-[1.005]" : "blur-0 opacity-100 scale-100"
                   )}
-                  style={{ 
+                  style={{
                     fontFamily: "'Syncopate', sans-serif",
                     fontWeight: 700,
-                    fontSize: 'clamp(80px, 9vw, 155px)', 
+                    fontSize: 'clamp(80px, 9vw, 155px)',
                     letterSpacing: isHovered && phase === 'initial' ? '-0.02em' : '-0.04em',
                     textShadow: phase === 'scramble' ? '0 0 40px rgba(255,255,255,0.1)' : 'none'
                   }}
@@ -162,7 +162,7 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
           {/* PHASE: WELCOME */}
           <AnimatePresence>
             {phase === 'welcome' && (
-              <motion.div 
+              <motion.div
                 className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
                 initial={{ opacity: 0, scale: 1.05, filter: 'blur(10px)' }}
                 animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
@@ -172,9 +172,9 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
                 <div className="text-white/70 font-bold tracking-[0.2em] text-sm md:text-base uppercase mb-2">
                   WELCOME,
                 </div>
-                <div 
-                  className="text-white uppercase whitespace-nowrap" 
-                  style={{ 
+                <div
+                  className="text-white uppercase whitespace-nowrap"
+                  style={{
                     fontFamily: "'Syncopate', sans-serif",
                     fontWeight: 700,
                     fontSize: 'clamp(40px, 8vw, 90px)',
@@ -190,7 +190,7 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
           {/* PHASE: PROFILE (NEW DASHBOARD HERO) */}
           <AnimatePresence>
             {phase === 'profile' && (
-              <motion.div 
+              <motion.div
                 className="absolute inset-0 flex flex-col w-full h-full"
                 initial={{ opacity: 0, filter: 'blur(10px)' }}
                 animate={{ opacity: 1, filter: 'blur(0px)' }}
@@ -199,7 +199,7 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
                 <div className="w-full h-full flex flex-col md:flex-row items-start justify-between pt-16 md:pt-32 px-6 md:px-16">
                   {/* Left Column: Metadata */}
                   <div className="flex flex-col gap-12 w-full md:w-1/3 mb-16 md:mb-0">
-                    <motion.div 
+                    <motion.div
                       className="flex flex-col"
                       initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5, duration: 1 }}
                     >
@@ -208,8 +208,8 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
                        <span className="text-sm font-bold tracking-[0.2em] text-white/60 uppercase">{format(now, 'EEEE')}</span>
                        <span className="text-[10px] font-bold tracking-[0.15em] text-white/40 uppercase mt-4">DAY {dayOfYear} / {isLeapYear ? 366 : 365}</span>
                     </motion.div>
-                    
-                    <motion.div 
+
+                    <motion.div
                       className="flex flex-col"
                       initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.7, duration: 1 }}
                     >
@@ -221,8 +221,8 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
 
                   {/* Right Column: Statement & Progress */}
                   <div className="flex flex-col md:items-end w-full md:w-2/3 text-left md:text-right h-full pb-12">
-                    
-                    <motion.div 
+
+                    <motion.div
                       className="text-5xl md:text-[80px] lg:text-[100px] font-black text-white uppercase leading-[0.85] tracking-tighter mb-16 md:mb-0"
                       style={{ fontFamily: "'Syncopate', sans-serif" }}
                       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 1.2 }}
@@ -230,15 +230,15 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
                       MAKE<br/>TODAY<br/>COUNT.
                     </motion.div>
 
-                    <motion.div 
+                    <motion.div
                       className="flex flex-col md:items-end w-full max-w-md mt-auto"
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9, duration: 1 }}
                     >
                        <span className="text-[10px] font-bold tracking-[0.3em] text-white/40 uppercase mb-4">TODAY'S PROGRESS</span>
                        <div className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-none mb-6">{todayInfo.percent}%</div>
-                       
+
                        <div className="w-full h-[1px] bg-white/20 relative mb-4">
-                          <motion.div 
+                          <motion.div
                             initial={{ width: 0 }} animate={{ width: `${todayInfo.percent}%` }} transition={{ duration: 1.5, delay: 0.8, ease: [0.16,1,0.3,1] }}
                             className="absolute top-0 left-0 h-[1px] bg-accent shadow-[0_0_12px_rgba(34,197,94,0.4)]"
                           />
@@ -250,7 +250,7 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
               </motion.div>
             )}
           </AnimatePresence>
-          
+
         </div>
       </div>
     </div>

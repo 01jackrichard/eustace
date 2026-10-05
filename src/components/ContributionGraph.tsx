@@ -14,17 +14,17 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
   const heatmapData = useMemo(() => {
     const startDate = new Date(year, 0, 1);
     const endDate = new Date(year, 11, 31);
-    
+
     // GitHub style week starts on Monday
     const calendarStart = startOfWeek(startDate, { weekStartsOn: 1 });
     const calendarEnd = endOfWeek(endDate, { weekStartsOn: 1 });
-    
+
     const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-    
+
     // Group into columns of 7 days (Mon-Sun)
     const weeks: Date[][] = [];
     let currentWeek: Date[] = [];
-    
+
     days.forEach(day => {
       currentWeek.push(day);
       if (currentWeek.length === 7) {
@@ -32,7 +32,7 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
         currentWeek = [];
       }
     });
-    
+
     // Month labels: find the week index where a month first appears
     const monthLabels: { label: string, colIndex: number }[] = [];
     weeks.forEach((week, index) => {
@@ -57,8 +57,8 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
     <div className="w-full flex flex-col relative">
       <div className="w-full overflow-x-auto pb-6 custom-scrollbar">
         <div className="min-w-full">
-          
-          <div 
+
+          <div
             className="grid gap-[3px] sm:gap-[4px]"
             style={{
               gridTemplateRows: '20px repeat(7, min-content)',
@@ -67,7 +67,7 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
           >
             {/* Month Labels (Row 1) */}
             {heatmapData.monthLabels.map(({ label, colIndex }) => (
-              <div 
+              <div
                 key={label}
                 className="relative flex items-end"
                 style={{ gridRow: 1, gridColumn: colIndex + 2 }} // +2 because col 1 is weekday labels
@@ -80,7 +80,7 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
 
             {/* Weekday Labels (Col 1, Rows 2-8) */}
             {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((dayStr, idx) => (
-              <div 
+              <div
                 key={dayStr}
                 className="flex items-center justify-end pr-2"
                 style={{ gridRow: idx + 2, gridColumn: 1 }}
@@ -93,14 +93,14 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
             {heatmapData.weeks.map((week, wIdx) => (
               week.map((day, dIdx) => {
                 const isInsideYear = day.getFullYear() === year;
-                
+
                 // If it's padding from previous/next year, render an invisible cell to maintain the grid
                 if (!isInsideYear) {
                   return (
-                    <div 
-                      key={day.toISOString()} 
+                    <div
+                      key={day.toISOString()}
                       style={{ gridRow: dIdx + 2, gridColumn: wIdx + 2 }}
-                      className="w-full aspect-square bg-transparent opacity-0 pointer-events-none" 
+                      className="w-full aspect-square bg-transparent opacity-0 pointer-events-none"
                     />
                   );
                 }
@@ -109,7 +109,7 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
                 const info = getDayCompletionInfo(data, dateStr);
                 const isTodayFlag = isToday(day);
                 const isFutureFlag = isAfter(startOfDay(day), today);
-                
+
                 let level = 0;
                 if (info.percent > 0) level = 1;
                 if (info.percent >= 25) level = 2;
@@ -118,8 +118,8 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
                 if (info.completedCount > 0 && info.totalCount === 0 && info.completed) level = 4;
 
                 return (
-                  <div 
-                    key={dateStr} 
+                  <div
+                    key={dateStr}
                     style={{ gridRow: dIdx + 2, gridColumn: wIdx + 2 }}
                     className="w-full aspect-square relative group/cell"
                   >
@@ -136,7 +136,7 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
                         isTodayFlag ? "ring-[1.5px] ring-offset-[1.5px] ring-offset-[#101010] ring-textMain/40 z-10" : ""
                       )}
                     />
-                    
+
                     {/* Tooltip */}
                     <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 mb-1 w-max bg-[#141414] border border-border/60 text-textMain rounded-xl p-3.5 opacity-0 group-hover/cell:opacity-100 transition-all duration-200 pointer-events-none shadow-2xl z-50 transform group-hover/cell:-translate-y-1 scale-95 group-hover/cell:scale-100">
                       <div className="text-[11px] font-bold tracking-wide mb-2.5 text-textMain/90">{format(day, 'EEEE, MMMM d, yyyy')}</div>
@@ -165,7 +165,7 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
 
         </div>
       </div>
-      
+
       {/* Bottom Strip: Progress & Legend */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
         <div className="flex items-center gap-4">
@@ -193,7 +193,7 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
             </>
           )}
         </div>
-        
+
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-[9px] font-bold text-textMuted uppercase tracking-wider mr-1">Less</span>
           <div className="w-[10px] h-[10px] rounded-[2px] bg-[#161616] border border-border/30" />

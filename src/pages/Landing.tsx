@@ -38,7 +38,7 @@ export function Landing() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#050505] text-textMain selection:bg-accent/30 font-sans overflow-x-hidden">
-      
+
       {/* SECTION 1 - NAVIGATION */}
       <nav className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b",
@@ -46,7 +46,7 @@ export function Landing() {
       )}>
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex justify-between items-center">
           <div className="font-bold tracking-[0.3em] uppercase text-textMain">Eustace</div>
-          
+
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
             <button className="text-[10px] font-bold tracking-widest uppercase text-textMuted hover:text-textMain transition-colors">Product</button>
@@ -84,14 +84,14 @@ export function Landing() {
 
             {/* SECTION 2 - HERO */}
       <section className="relative min-h-screen flex flex-col items-center justify-between pt-32 pb-8 overflow-hidden bg-[#050505]">
-        
+
         {/* Eyebrow */}
         <div className="relative z-20 text-[9px] md:text-[10px] font-bold tracking-[0.4em] uppercase text-textMuted mt-4 md:mt-8 text-center px-6 opacity-0 animate-[fade-in-down_1s_ease-out_forwards]" style={{ animationDelay: '0.2s' }}>
           A Personal Productivity Operating System
         </div>
-        
+
         {/* The Hands Asset */}
-        <div 
+        <div
           className="relative w-full h-[40vh] md:h-[45vh] flex items-center justify-center z-0 opacity-0 animate-[hands-settle_1.4s_cubic-bezier(0.2,0.8,0.2,1)_forwards]"
           style={{ animationDelay: '0.4s' }}
         >
@@ -101,25 +101,25 @@ export function Landing() {
           <div className="absolute inset-y-0 left-0 w-1/4 bg-gradient-to-r from-[#050505] via-[#050505]/50 to-transparent z-10 pointer-events-none" />
           <div className="absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-[#050505] via-[#050505]/50 to-transparent z-10 pointer-events-none" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_10%,_#050505_100%)] z-10 pointer-events-none opacity-90" />
-          
-          <img 
-            src="/hero-hands-hd.png" 
-            alt="Eustace Classical Hands" 
+
+          <img
+            src="/hero-hands-hd.png"
+            alt="Eustace Classical Hands"
             className="absolute inset-0 w-full h-full object-cover object-center"
             style={{ transform: `translateY(${scrollY * 0.15}px)` }}
           />
         </div>
-        
+
         {/* Typography Content */}
         <div className="relative z-20 flex flex-col items-center text-center max-w-5xl mx-auto w-full px-6 mb-12">
           <h1 className="text-4xl sm:text-6xl md:text-[80px] lg:text-[90px] hero-philosopher tracking-tight leading-[1] text-textMain mb-6 opacity-0 animate-[fade-in-up_0.8s_ease-out_forwards] whitespace-nowrap" style={{ animationDelay: '0.8s' }}>
             TURN INTENTION<br />INTO ACTION.
           </h1>
-          
+
           <p className="text-sm md:text-base text-textMuted max-w-2xl font-medium mx-auto mb-10 opacity-0 animate-[fade-in-up_0.8s_ease-out_forwards] leading-relaxed" style={{ animationDelay: '1.0s' }}>
             Eustace helps you turn everyday tasks into measurable progress — track your work, understand your consistency, and build momentum over time.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row items-center gap-6 opacity-0 animate-[fade-in-up_0.8s_ease-out_forwards]" style={{ animationDelay: '1.2s' }}>
             <Link to="/signup" className="flex items-center gap-3 px-8 py-4 bg-textMain text-background hover:bg-white text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all duration-300 rounded-sm w-full sm:w-auto justify-center">
               Start Tracking Now →
@@ -157,7 +157,7 @@ export function Landing() {
           <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-16">
             PLAN. EXECUTE. MEASURE.
           </h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 w-full text-left">
             <div className="flex flex-col border-t border-border/20 pt-6">
               <span className="text-[10px] font-bold tracking-widest text-textMuted mb-4">01 &mdash; TASKS</span>
@@ -190,7 +190,7 @@ export function Landing() {
               Eustace helps you visualize your streaks and completion history. By seeing your progress clearly, you build the psychological momentum needed to show up day after day.
             </p>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-background/50 border border-border/10 p-6 flex flex-col justify-between aspect-square rounded-sm">
               <span className="text-[9px] font-bold tracking-widest uppercase text-textMuted">Current Streak</span>
@@ -230,7 +230,7 @@ export function Landing() {
                 <div className="text-[9px] font-bold tracking-widest uppercase text-textMuted">Days</div>
               </div>
             </div>
-            
+
             <div className="bg-[#050505] border border-border/20 p-4 md:p-6 rounded-sm flex items-center justify-between opacity-70">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-full bg-textMain/10 border border-textMain/20 flex items-center justify-center font-bold text-xs">E</div>
@@ -245,7 +245,7 @@ export function Landing() {
               </div>
             </div>
           </div>
-          
+
           <div className="order-1 lg:order-2">
             <div className="text-[10px] font-bold tracking-[0.3em] uppercase text-textMuted mb-6">Your Circle</div>
             <h2 className="text-3xl md:text-5xl font-black tracking-tight leading-tight mb-6">
@@ -281,7 +281,7 @@ export function Landing() {
                 Built for consistency,<br />one day at a time.
               </p>
             </div>
-            
+
             <div>
               <div className="text-[10px] font-bold tracking-widest uppercase text-textMuted mb-6">Product</div>
               <ul className="flex flex-col gap-4 text-xs font-medium">
@@ -292,7 +292,7 @@ export function Landing() {
                 <li><Link to="/friends" className="text-textMain hover:text-textMuted transition-colors">Friends</Link></li>
               </ul>
             </div>
-            
+
             <div>
               <div className="text-[10px] font-bold tracking-widest uppercase text-textMuted mb-6">Account</div>
               <ul className="flex flex-col gap-4 text-xs font-medium">
@@ -301,9 +301,9 @@ export function Landing() {
               </ul>
             </div>
           </div>
-          
+
           <div className="w-full h-px bg-border/20 mb-8" />
-          
+
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] font-medium text-textMuted uppercase tracking-widest">
             <div>&copy; 2026 Jack Richard. All rights reserved.</div>
             <div>Designed & built with intention.</div>

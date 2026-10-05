@@ -18,12 +18,12 @@ export function Login() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    
+
     if (error) setError(error.message);
     else navigate('/dashboard');
-    
+
     setLoading(false);
   };
 
@@ -32,9 +32,9 @@ export function Login() {
       <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-8 shadow-2xl">
         <h1 className="text-2xl font-bold tracking-tight text-textMain mb-2 text-center">Welcome back</h1>
         <p className="text-textMuted text-sm text-center mb-8">Sign in to your Eustace workspace</p>
-        
+
         {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg mb-6">{error}</div>}
-        
+
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Email</label>
@@ -44,12 +44,12 @@ export function Login() {
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Password</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
           </div>
-          
+
           <button type="submit" disabled={loading} className="w-full bg-textMain text-background hover:bg-white font-semibold py-2.5 rounded-xl mt-4 transition-colors flex justify-center items-center h-11">
             {loading ? <Loader2 className="animate-spin w-5 h-5" /> : "Log In"}
           </button>
         </form>
-        
+
         <div className="mt-8 text-center text-sm text-textMuted">
           Don't have an account? <Link to="/signup" className="text-accent hover:underline">Sign up</Link>
         </div>

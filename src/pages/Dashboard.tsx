@@ -13,7 +13,7 @@ export function Dashboard() {
   const { checkLocalData, migrateLocalData } = useAuth();
   const [currentYear] = useState<number>(new Date().getFullYear());
   const [heroActivated, setHeroActivated] = useState(() => sessionStorage.getItem('eustace_hero_activated') === 'true');
-  
+
   const { data, loading, toggleTaskCompletion, addTask } = useProductivityData(currentYear);
   const [isMigrating, setIsMigrating] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -27,7 +27,7 @@ export function Dashboard() {
   const handleMigrate = async () => {
     setIsMigrating(true);
     await migrateLocalData();
-    window.location.reload(); 
+    window.location.reload();
   };
 
   if (loading || !data || !stats) {
@@ -42,7 +42,7 @@ export function Dashboard() {
   // Time & Dates
   const today = new Date();
   const dateStr = format(today, 'yyyy-MM-dd');
-  
+
 
   // Today Data
   const info = getDayCompletionInfo(data, dateStr);
@@ -73,7 +73,7 @@ export function Dashboard() {
   return (
     <>
       <div className="animate-fade-in pb-32 max-w-[1200px] mx-auto w-full pt-4 md:pt-8 flex flex-col gap-10">
-        
+
         <InteractiveHero stats={stats} todayInfo={info} onActivated={() => setHeroActivated(true)} />
 
         <div className={cn(
@@ -90,7 +90,7 @@ export function Dashboard() {
                 <p className="text-textMuted max-w-md text-sm md:text-base mb-10">
                   Your {currentYear} journey starts today. Start by adding your first task and begin building your momentum.
                 </p>
-                <button 
+                <button
                   onClick={() => setIsAddModalOpen(true)}
                   className="flex items-center gap-2 text-textMain hover:text-accent transition-colors font-bold text-xs tracking-widest uppercase"
                 >
@@ -112,7 +112,7 @@ export function Dashboard() {
 
           {!(stats.completedDays === 0 && info.totalCount === 0 && !hasLocalData) && (
             <div className="flex flex-col w-full max-w-4xl mx-auto gap-24">
-              
+
               {/* SECTION 1 - TODAY */}
               <div className="flex flex-col gap-6">
                  <div className="text-[10px] font-bold tracking-[0.3em] text-textMuted uppercase border-b border-border/20 pb-4">
@@ -148,7 +148,7 @@ export function Dashboard() {
                      <Plus size={12} /> ADD TASK
                    </button>
                  </div>
-                 
+
                  {todayTasks.length === 0 ? (
                     <div className="flex flex-col gap-2 py-8">
                       <span className="text-[10px] font-mono font-bold tracking-widest text-textMuted">01</span>
@@ -162,7 +162,7 @@ export function Dashboard() {
                         const isSkipped = (task.recurring !== 'none' && meta.skippedDates?.includes(dateStr)) || meta.status === 'skipped';
                         const isCompleted = dayData.completedTaskIds.includes(task.id);
                         return (
-                          <div 
+                          <div
                             key={task.id}
                             onClick={() => !isSkipped && toggleTaskCompletion(task.id, dateStr)}
                             className={cn("flex items-start gap-6 py-4 group border-b border-border/10 last:border-0", !isSkipped && "cursor-pointer")}
@@ -205,7 +205,7 @@ export function Dashboard() {
                  <div className="text-[10px] font-bold tracking-[0.3em] text-textMuted uppercase border-b border-border/20 pb-4">
                    RECENT ACTIVITY
                  </div>
-                 
+
                  {recentActivity.length === 0 ? (
                     <div className="flex flex-col gap-2 py-8">
                       <span className="text-xs font-bold tracking-widest text-textMuted uppercase">NO ACTIVITY YET</span>
@@ -236,7 +236,7 @@ export function Dashboard() {
 
           {/* MODALS */}
           {isAddModalOpen && (
-            <AddTaskModal 
+            <AddTaskModal
               date={today}
               onClose={() => setIsAddModalOpen(false)}
               onAdd={(t) => addTask({ ...t, createdAt: dateStr })}

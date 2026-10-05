@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { AppData, Task, DailyData, TaskMetadata } from '../lib/dataManager';
 import { calculateStats, parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
+import toast from 'react-hot-toast';
 
 export function useProductivityData(year: number) {
   const { user, profile } = useAuth();
@@ -19,8 +20,8 @@ export function useProductivityData(year: number) {
     const { data: dbCompletions } = await supabase.from('task_completions').select('*').eq('user_id', user.id);
     const { data: dbDailyData } = await supabase.from('daily_data').select('*').eq('user_id', user.id);
 
-    const recurringTasks: Task[] = [];
     const days: Record<string, DailyData> = {};
+    const recurringTasks: Task[] = [];
 
     if (dbTasks) {
       for (const t of dbTasks) {
@@ -30,7 +31,7 @@ export function useProductivityData(year: number) {
             meta = JSON.parse(t.description);
           } catch {}
         }
-        
+
         const task: Task = {
           id: t.id,
           name: t.name,
@@ -41,7 +42,7 @@ export function useProductivityData(year: number) {
           description: t.description,
           metadata: meta
         };
-        
+
         if (t.recurring !== 'none') {
           recurringTasks.push(task);
         } else {
@@ -73,7 +74,7 @@ export function useProductivityData(year: number) {
       version: 2,
       days,
       recurringTasks,
-      settings: { theme: 'dark', weekStartsOn: 0 } 
+      settings: { theme: 'dark', weekStartsOn: 0 }
     });
     setLoading(false);
   }, [user, year]);
@@ -92,8 +93,8 @@ export function useProductivityData(year: number) {
   }, [data, user, profile, year]);
 
   const addTask = async (taskData: Omit<Task, 'id'>) => {
-    if (!user || !data) return;
-    
+    if (!user || !data) return false;
+
     const { data: inserted, error } = await supabase
       .from('tasks')
       .insert({
@@ -105,13 +106,13 @@ export function useProductivityData(year: number) {
         created_at: taskData.createdAt,
         description: taskData.description
       }).select().single();
-      
+
     if (inserted && !error) {
       let meta: TaskMetadata = {};
       if (inserted.description) {
         try { meta = JSON.parse(inserted.description); } catch {}
       }
-      
+
       const newTask: Task = {
         id: inserted.id,
         name: inserted.name,
@@ -122,7 +123,7 @@ export function useProductivityData(year: number) {
         description: inserted.description,
         metadata: meta
       };
-      
+
       const newData = { ...data };
       if (newTask.recurring !== 'none') {
         newData.recurringTasks.push(newTask);
@@ -131,11 +132,15 @@ export function useProductivityData(year: number) {
         newData.days[newTask.createdAt].tasks.push(newTask);
       }
       setData(newData);
+      return true;
+    } else {
+      toast.error('Failed to create task');
+      return false;
     }
   };
 
   const updateTask = async (task: Task) => {
-    if (!user || !data) return;
+    if (!user || !data) return false;
     const { data: updated, error } = await supabase
       .from('tasks')
       .update({
@@ -147,7 +152,7 @@ export function useProductivityData(year: number) {
       })
       .match({ id: task.id, user_id: user.id })
       .select().single();
-      
+
     if (updated && !error) {
       const newData = { ...data };
       if (task.recurring !== 'none') {
@@ -159,56 +164,92 @@ export function useProductivityData(year: number) {
         }
       }
       setData(newData);
+      return true;
+    } else {
+      toast.error('Failed to update task');
+      return false;
     }
   };
 
   const toggleTaskCompletion = async (taskId: string, dateStr: string) => {
     if (!user || !data) return;
-    
+
     const dayData = data.days[dateStr] || { tasks: [], completedTaskIds: [] };
     const isCompleted = dayData.completedTaskIds.includes(taskId);
-    
+
+    const previousData = { ...data };
     const newData = { ...data };
     if (!newData.days[dateStr]) newData.days[dateStr] = { tasks: [], completedTaskIds: [] };
-    
+
     if (isCompleted) {
       newData.days[dateStr].completedTaskIds = newData.days[dateStr].completedTaskIds.filter(id => id !== taskId);
       setData(newData);
-      await supabase.from('task_completions').delete().match({ user_id: user.id, task_id: taskId, completed_date: dateStr });
+      const { error } = await supabase.from('task_completions').delete().match({ user_id: user.id, task_id: taskId, completed_date: dateStr });
+      if (error) {
+        setData(previousData);
+        toast.error('Failed to update task status');
+      }
     } else {
       newData.days[dateStr].completedTaskIds.push(taskId);
       setData(newData);
-      await supabase.from('task_completions').insert({ user_id: user.id, task_id: taskId, completed_date: dateStr });
+      const { error } = await supabase.from('task_completions').insert({ user_id: user.id, task_id: taskId, completed_date: dateStr });
+      if (error) {
+        setData(previousData);
+        toast.error('Failed to update task status');
+      }
     }
   };
 
   const skipTask = async (taskId: string, dateStr: string, isRecurring: boolean) => {
     if (!user || !data) return;
-    const task = isRecurring 
+    const task = isRecurring
       ? data.recurringTasks.find(t => t.id === taskId)
       : data.days[dateStr]?.tasks.find(t => t.id === taskId);
-      
+
     if (!task) return;
-    
-    const meta = parseTaskMetadata(task);
+
     if (isRecurring) {
+      const meta = parseTaskMetadata(task);
       meta.skippedDates = [...(meta.skippedDates || []), dateStr];
+      const updatedTask = { ...task, description: serializeTaskMetadata(meta), metadata: meta };
+      const success = await updateTask(updatedTask);
+      if (success) {
+        toast.success('Task skipped for today');
+      }
     } else {
-      meta.status = 'skipped';
+      // Non-recurring: move to tomorrow
+      const tomorrowStr = new Date(new Date(dateStr).getTime() + 86400000).toISOString().split('T')[0];
+      const updatedTask = { ...task, createdAt: tomorrowStr };
+
+      const previousData = { ...data };
+      const newData = { ...data };
+      if (newData.days[dateStr]) {
+        newData.days[dateStr].tasks = newData.days[dateStr].tasks.filter(t => t.id !== taskId);
+      }
+      if (!newData.days[tomorrowStr]) {
+        newData.days[tomorrowStr] = { tasks: [], completedTaskIds: [] };
+      }
+      newData.days[tomorrowStr].tasks.push(updatedTask);
+      setData(newData);
+
+      const { error } = await supabase.from('tasks').update({ created_at: tomorrowStr }).match({ id: task.id, user_id: user.id });
+      if (error) {
+        setData(previousData);
+        toast.error('Failed to move task');
+      } else {
+        toast.success('Task moved to tomorrow');
+      }
     }
-    
-    const updatedTask = { ...task, description: serializeTaskMetadata(meta), metadata: meta };
-    await updateTask(updatedTask);
   };
 
   const updateNote = async (dateStr: string, note: string) => {
     if (!user || !data) return;
-    
+
     const newData = { ...data };
     if (!newData.days[dateStr]) newData.days[dateStr] = { tasks: [], completedTaskIds: [] };
     newData.days[dateStr].note = note;
     setData(newData);
-    
+
     const { data: existing } = await supabase.from('daily_data').select('id').match({ user_id: user.id, date: dateStr }).single();
     if (existing) {
       await supabase.from('daily_data').update({ note }).match({ id: existing.id });
@@ -219,15 +260,15 @@ export function useProductivityData(year: number) {
 
   const toggleManualCompletion = async (dateStr: string) => {
     if (!user || !data) return;
-    
+
     const isManuallyCompleted = !!data.days[dateStr]?.manualCompletion;
     const nextState = !isManuallyCompleted;
-    
+
     const newData = { ...data };
     if (!newData.days[dateStr]) newData.days[dateStr] = { tasks: [], completedTaskIds: [] };
     newData.days[dateStr].manualCompletion = nextState;
     setData(newData);
-    
+
     const { data: existing } = await supabase.from('daily_data').select('id').match({ user_id: user.id, date: dateStr }).single();
     if (existing) {
       await supabase.from('daily_data').update({ manual_completion: nextState }).match({ id: existing.id });
@@ -238,7 +279,10 @@ export function useProductivityData(year: number) {
 
   const deleteTask = async (taskId: string, dateStr: string, isRecurring: boolean) => {
     if (!user || !data) return;
+
+    const previousData = { ...data };
     const newData = { ...data };
+
     if (isRecurring) {
       newData.recurringTasks = newData.recurringTasks.filter(t => t.id !== taskId);
     } else if (newData.days[dateStr]) {
@@ -246,7 +290,14 @@ export function useProductivityData(year: number) {
       newData.days[dateStr].completedTaskIds = newData.days[dateStr].completedTaskIds.filter(id => id !== taskId);
     }
     setData(newData);
-    await supabase.from('tasks').delete().match({ id: taskId, user_id: user.id });
+
+    const { error } = await supabase.from('tasks').delete().match({ id: taskId, user_id: user.id });
+    if (error) {
+      setData(previousData);
+      toast.error('Failed to delete task');
+    } else {
+      toast.success('Task deleted');
+    }
   };
 
   return {

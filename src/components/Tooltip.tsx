@@ -19,9 +19,9 @@ export function Tooltip({ date, rect, data }: TooltipProps) {
 
   useEffect(() => {
     // Calculate tooltip position centered above the element
-    const tooltipWidth = 160; 
+    const tooltipWidth = 160;
     const tooltipHeight = 70; // approx
-    
+
     let top = rect.top - tooltipHeight - 10;
     let left = rect.left + rect.width / 2 - tooltipWidth / 2;
 
@@ -37,7 +37,7 @@ export function Tooltip({ date, rect, data }: TooltipProps) {
   if (!mounted) return null;
 
   return createPortal(
-    <div 
+    <div
       className="absolute z-[100] animate-pop pointer-events-none flex flex-col items-center"
       style={{ top: position.top, left: position.left }}
     >

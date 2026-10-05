@@ -13,13 +13,13 @@ interface YearCalendarProps {
 export function YearCalendar({ year, data, onDayClick }: YearCalendarProps) {
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const months = Array.from({ length: 12 }, (_, i) => i);
-  
+
   const today = new Date();
   const isCurrentYear = today.getFullYear() === year;
-  
+
   let yearProgress = 0;
   let remainingDays = 0;
-  
+
   if (isCurrentYear) {
     const start = startOfYear(today);
     const end = endOfYear(today);
@@ -42,11 +42,11 @@ export function YearCalendar({ year, data, onDayClick }: YearCalendarProps) {
       <div className="w-full">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 hidden">
           <h2 className="text-xl font-bold tracking-tight">{year} OVERVIEW</h2>
-          
+
           {isCurrentYear && (
             <div className="flex items-center gap-4 text-sm w-full sm:w-auto">
               <div className="flex-grow sm:w-48 h-2 bg-background rounded-full overflow-hidden border border-border">
-                <div 
+                <div
                   className="h-full bg-textMuted/40 rounded-full transition-all duration-1000"
                   style={{ width: `${yearProgress}%` }}
                 />
@@ -61,18 +61,18 @@ export function YearCalendar({ year, data, onDayClick }: YearCalendarProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-10">
           {months.map(month => (
             <div key={`${year}-${month}`} className="flex flex-col items-center sm:items-start group">
-              <button 
+              <button
                 onClick={() => setSelectedMonth(month)}
                 className="text-sm font-medium text-textMain mb-3 px-1 hover:text-accent transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
                 aria-label={`View details for ${format(new Date(year, month, 1), 'MMMM')}`}
               >
                 {format(new Date(year, month, 1), 'MMMM')}
               </button>
-              <MonthCalendar 
-                year={year} 
-                month={month} 
-                data={data} 
-                onDayClick={onDayClick} 
+              <MonthCalendar
+                year={year}
+                month={month}
+                data={data}
+                onDayClick={onDayClick}
                 hideHeader={true}
               />
             </div>

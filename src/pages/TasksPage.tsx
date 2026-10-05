@@ -22,14 +22,9 @@ export function TasksPage() {
   }
 
   return (
-    <div className="animate-fade-in pb-16 max-w-3xl mx-auto w-full">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-textMain">Tasks</h1>
-        <p className="text-textMuted text-sm mt-1">Manage your daily goals.</p>
-      </div>
-      
-      <DailyView 
-        date={selectedDate} 
+    <div className="animate-fade-in pb-16 pt-4 md:pt-8 max-w-3xl mx-auto w-full px-4 md:px-0">
+      <DailyView
+        date={selectedDate}
         setDate={setSelectedDate}
         data={data}
         hook={{ updateNote, toggleManualCompletion, toggleTaskCompletion, addTask, updateTask, skipTask, deleteTask }}

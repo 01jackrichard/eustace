@@ -64,11 +64,11 @@ export function usePublicProductivityData(targetUserId: string, year: number) {
         days[date].completedTaskIds.push(c.task_id);
       }
 
-      setData({ 
-        version: 2, 
-        settings: { theme: 'dark', weekStartsOn: 1 }, 
-        recurringTasks, 
-        days 
+      setData({
+        version: 2,
+        settings: { theme: 'dark', weekStartsOn: 1 },
+        recurringTasks,
+        days
       });
     } catch (err) {
       console.error("RPC Error:", err);

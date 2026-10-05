@@ -32,10 +32,10 @@ export function CalendarPage() {
         </div>
       </div>
       <div className="bg-surface border border-border/60 rounded-2xl p-6 md:p-8 hover:border-textMuted/30 transition-colors">
-        <YearCalendar 
-          year={currentYear} 
-          data={data} 
-          onDayClick={(date) => navigate('/tasks', { state: { date: date.toISOString() } })} 
+        <YearCalendar
+          year={currentYear}
+          data={data}
+          onDayClick={(date) => navigate('/tasks', { state: { date: date.toISOString() } })}
         />
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, User as UserIcon, Calendar, CheckSquare, BarChart2, Users, Settings, ChevronDown, LogOut } from 'lucide-react';
+import { LayoutDashboard, User as UserIcon, Calendar, CheckSquare, BarChart2, Users, Settings, ChevronDown, LogOut, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { useState } from 'react';
@@ -12,6 +12,7 @@ export function Sidebar() {
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Calendar', path: '/calendar', icon: Calendar },
     { name: 'Tasks', path: '/tasks', icon: CheckSquare },
+    { name: 'Notes', path: '/notes', icon: FileText },
     { name: 'Analytics', path: '/analytics', icon: BarChart2 },
     { name: 'Friends', path: '/friends', icon: Users },
   ];
@@ -29,8 +30,8 @@ export function Sidebar() {
             to={item.path}
             className={({ isActive }) => cn(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
-              isActive 
-                ? "bg-surface text-textMain border-border/40 shadow-sm" 
+              isActive
+                ? "bg-surface text-textMain border-border/40 shadow-sm"
                 : "text-textMuted hover:text-textMain hover:bg-surface/50 border-transparent"
             )}
           >
@@ -44,8 +45,8 @@ export function Sidebar() {
             to="/profile"
             className={({ isActive }) => cn(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group border",
-              isActive 
-                ? "bg-surface text-textMain border-border/40 shadow-sm" 
+              isActive
+                ? "bg-surface text-textMain border-border/40 shadow-sm"
                 : "text-textMuted hover:text-textMain hover:bg-surface/50 border-transparent"
             )}
           >
@@ -62,8 +63,8 @@ export function Sidebar() {
             to="/settings"
             className={({ isActive }) => cn(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
-              isActive 
-                ? "bg-surface text-textMain border-border/40 shadow-sm" 
+              isActive
+                ? "bg-surface text-textMain border-border/40 shadow-sm"
                 : "text-textMuted hover:text-textMain hover:bg-surface/50 border-transparent"
             )}
           >
@@ -74,7 +75,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 relative">
-        <button 
+        <button
           onClick={() => setShowAccountMenu(!showAccountMenu)}
           className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-surface/50 transition-colors text-left group"
         >
@@ -96,7 +97,7 @@ export function Sidebar() {
 
         {showAccountMenu && (
           <div className="absolute bottom-full left-4 right-4 mb-2 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-50 animate-pop">
-            <button 
+            <button
               onClick={signOut}
               className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left"
             >

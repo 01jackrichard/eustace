@@ -29,11 +29,11 @@ export function AnalyticsPage() {
         .from('task_completions')
         .select('created_at')
         .eq('user_id', user.id);
-        
+
       if (completions) {
         const hours: Record<number, number> = {};
         for (let i = 0; i < 24; i++) hours[i] = 0;
-        
+
         completions.forEach(c => {
           const date = new Date(c.created_at);
           const h = date.getHours();
@@ -58,7 +58,7 @@ export function AnalyticsPage() {
     const today = startOfDay(new Date());
     let daysToLookBack = 7;
     let dates: Date[] = [];
-    
+
     if (range === '1Y') {
       const yearStart = new Date(currentYear, 0, 1);
       let yearEnd = new Date(currentYear, 11, 31);
@@ -72,7 +72,7 @@ export function AnalyticsPage() {
         dates.push(subDays(today, i));
       }
     }
-    
+
     const trendData: any[] = [];
     let completedInPeriod = 0;
     let totalInPeriod = 0;
@@ -171,12 +171,12 @@ export function AnalyticsPage() {
 
   return (
     <div className="animate-fade-in pb-20 max-w-6xl mx-auto w-full pt-4 md:pt-6 flex flex-col gap-8 relative z-0">
-      
+
       {/* Background Depth */}
       <div className="fixed inset-0 pointer-events-none z-[-1] flex items-center justify-center overflow-hidden">
         <div className="w-[800px] h-[800px] bg-accent/5 rounded-full blur-[120px] opacity-30 transform -translate-y-1/2" />
       </div>
-      
+
       {/* 1. PAGE HEADER */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-border/40 pb-6">
         <div>
@@ -189,11 +189,11 @@ export function AnalyticsPage() {
           </div>
           <p className="text-textMuted text-sm font-medium leading-snug">Understand your productivity.<br/>Discover your patterns. Build better days.</p>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <div className="bg-[#101010] border border-border/40 rounded-lg p-1 flex items-center shadow-inner">
             {(['7D', '30D', '90D', '1Y'] as Range[]).map(r => (
-              <button 
+              <button
                 key={r}
                 onClick={() => setRange(r)}
                 className={cn(
@@ -226,7 +226,7 @@ export function AnalyticsPage() {
 
       {/* 3. HERO CHART & RADIALS */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* TREND */}
         <div className="lg:col-span-8 bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 flex flex-col relative overflow-hidden h-[300px] group">
           <div className="flex items-start justify-between relative z-10">
@@ -234,7 +234,7 @@ export function AnalyticsPage() {
               <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-1">PRODUCTIVITY TREND</h2>
               <p className="text-sm font-bold text-textMain tracking-tight">Your productivity over time.</p>
             </div>
-            
+
             {hasData && (
               <div className="bg-[#141414] border border-border/60 rounded-xl px-4 py-2 flex items-center gap-4 shadow-xl">
                 <div className="text-[10px] font-bold text-textMuted uppercase tracking-widest">TODAY</div>
@@ -244,7 +244,7 @@ export function AnalyticsPage() {
               </div>
             )}
           </div>
-          
+
           <div className="flex-1 relative w-full flex items-end z-0 mt-4">
             {!hasData ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-20">
@@ -266,22 +266,22 @@ export function AnalyticsPage() {
                     <stop offset="100%" stopColor="#22c55e" stopOpacity="0.0" />
                   </linearGradient>
                 </defs>
-                
+
                 {[0, 25, 50, 75, 100].map(val => (
                   <line key={val} x1="0" y1={100 - val} x2="100" y2={100 - val} stroke="#222" strokeWidth="0.5" />
                 ))}
 
                 {hasData ? (
                   <>
-                    <polygon 
-                      points={`0,100 ${analytics.trendData.map((d, i) => `${(i / (analytics.trendData.length - 1 || 1)) * 100},${100 - d.percent}`).join(' ')} 100,100`} 
-                      fill="url(#area-gradient)" 
+                    <polygon
+                      points={`0,100 ${analytics.trendData.map((d, i) => `${(i / (analytics.trendData.length - 1 || 1)) * 100},${100 - d.percent}`).join(' ')} 100,100`}
+                      fill="url(#area-gradient)"
                       className="animate-fade-in"
                     />
-                    <polyline 
-                      points={analytics.trendData.map((d, i) => `${(i / (analytics.trendData.length - 1 || 1)) * 100},${100 - d.percent}`).join(' ')} 
-                      fill="none" 
-                      stroke="#22c55e" 
+                    <polyline
+                      points={analytics.trendData.map((d, i) => `${(i / (analytics.trendData.length - 1 || 1)) * 100},${100 - d.percent}`).join(' ')}
+                      fill="none"
+                      stroke="#22c55e"
                       strokeWidth="2"
                       strokeLinejoin="round"
                       strokeLinecap="round"
@@ -290,10 +290,10 @@ export function AnalyticsPage() {
                   </>
                 ) : (
                   // Placeholder wave
-                  <polyline 
-                    points="0,90 20,70 40,85 60,40 80,60 100,20" 
-                    fill="none" 
-                    stroke="#444" 
+                  <polyline
+                    points="0,90 20,70 40,85 60,40 80,60 100,20"
+                    fill="none"
+                    stroke="#444"
                     strokeWidth="1.5"
                     strokeLinejoin="round"
                     strokeLinecap="round"
@@ -320,20 +320,20 @@ export function AnalyticsPage() {
                 )}
               </div>
             </div>
-            
+
             <div className="relative w-24 h-24 shrink-0">
               <svg className="w-full h-full transform -rotate-90">
                 <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-background border" />
                 {hasData && (
-                  <circle 
-                    cx="48" cy="48" r="40" 
-                    stroke="currentColor" 
-                    strokeWidth="6" 
-                    fill="transparent" 
+                  <circle
+                    cx="48" cy="48" r="40"
+                    stroke="currentColor"
+                    strokeWidth="6"
+                    fill="transparent"
                     strokeDasharray={2 * Math.PI * 40}
                     strokeDashoffset={(2 * Math.PI * 40) * (1 - analytics.consistencyInPeriod / 100)}
                     strokeLinecap="round"
-                    className="text-accent drop-shadow-[0_0_6px_rgba(34,197,94,0.4)] transition-all duration-1000 ease-out" 
+                    className="text-accent drop-shadow-[0_0_6px_rgba(34,197,94,0.4)] transition-all duration-1000 ease-out"
                   />
                 )}
               </svg>
@@ -370,15 +370,15 @@ export function AnalyticsPage() {
               <svg className="w-full h-full transform -rotate-90">
                 <circle cx="48" cy="48" r="34" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-background" />
                 {hasData && analytics.totalInPeriod > 0 && (
-                  <circle 
-                    cx="48" cy="48" r="34" 
-                    stroke="currentColor" 
-                    strokeWidth="8" 
-                    fill="transparent" 
+                  <circle
+                    cx="48" cy="48" r="34"
+                    stroke="currentColor"
+                    strokeWidth="8"
+                    fill="transparent"
                     strokeDasharray={2 * Math.PI * 34}
                     strokeDashoffset={(2 * Math.PI * 34) * (1 - analytics.completedInPeriod / analytics.totalInPeriod)}
                     strokeLinecap="round"
-                    className="text-accent" 
+                    className="text-accent"
                   />
                 )}
               </svg>
@@ -400,7 +400,7 @@ export function AnalyticsPage() {
               <div key={i} className="flex flex-col items-center gap-2 flex-1 h-full group relative cursor-crosshair">
                 <div className="w-full bg-[#141414] rounded-sm flex flex-col justify-end h-full relative overflow-hidden transition-colors">
                   {hasData ? (
-                    <div 
+                    <div
                       className="w-full bg-accent/90 rounded-sm transition-all duration-700 ease-out hover:bg-accent"
                       style={{ height: `${d.percent}%`, minHeight: d.total > 0 ? '4px' : '0' }}
                     />
@@ -450,32 +450,32 @@ export function AnalyticsPage() {
       <div className="bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 md:p-8">
         <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-1">PRODUCTIVITY ACTIVITY</h2>
         <p className="text-sm font-bold text-textMain tracking-tight mb-2">Your year in one view.</p>
-        
+
         <div className="-mx-2 sm:mx-0">
-          <ContributionGraph 
-            year={currentYear} 
-            data={data} 
-            onDayClick={() => navigate('/tasks')} 
+          <ContributionGraph
+            year={currentYear}
+            data={data}
+            onDayClick={() => navigate('/tasks')}
           />
         </div>
       </div>
 
       {/* 6. BOTTOM STRIP */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* WHEN YOU WORK */}
         <div className="bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 h-[240px] flex flex-col">
           <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-4">WHEN YOU WORK</h2>
-          
+
           {isLoadingHourly ? (
              <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-textMuted/30 w-5 h-5"/></div>
           ) : Object.values(hourlyData).some(v => v > 0) ? (
             <div className="flex flex-col gap-2 flex-1 justify-center">
               {[6, 8, 10, 12, 14, 16, 18, 20].map(h => {
-                const val = (hourlyData[h] || 0) + (hourlyData[h+1] || 0); 
+                const val = (hourlyData[h] || 0) + (hourlyData[h+1] || 0);
                 const max = Math.max(...Object.values(hourlyData)) * 2 || 1;
                 const percent = (val / max) * 100;
-                
+
                 return (
                   <div key={h} className="flex items-center gap-3 group">
                     <div className="w-10 text-[9px] font-bold text-textMuted tracking-wider text-right group-hover:text-textMain transition-colors">
@@ -535,7 +535,7 @@ export function AnalyticsPage() {
         <div className="bg-gradient-to-br from-[#121212] to-[#0a0a0a] border border-border/40 rounded-2xl p-6 h-[240px] flex flex-col relative overflow-hidden group">
           <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 pointer-events-none" />
           <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-6 relative z-10">PRODUCTIVITY INSIGHTS</h2>
-          
+
           <div className="flex flex-col gap-4 flex-1 justify-center relative z-10">
             {!hasData ? (
               <div className="flex flex-col items-center justify-center text-center">
@@ -562,7 +562,7 @@ export function AnalyticsPage() {
 
 function KPICard({ label, value, subvalue, emptyText, className = "", data }: { label: string, value: string, subvalue?: string, emptyText: string, className?: string, data: any[] }) {
   const hasData = data && data.length > 0 && data.some(d => d.percent > 0);
-  
+
   return (
     <div className={cn("bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-xl p-4 flex flex-col justify-between transition-all duration-300 hover:border-textMuted/40 group", className)}>
       <div>
@@ -573,14 +573,14 @@ function KPICard({ label, value, subvalue, emptyText, className = "", data }: { 
         </div>
         <div className="text-[10px] font-bold text-textMuted/70">{hasData ? emptyText : emptyText}</div>
       </div>
-      
+
       <div className="mt-4 pt-3 border-t border-border/30 h-8 flex items-end">
         {hasData ? (
            <svg viewBox="0 0 100 20" preserveAspectRatio="none" className="w-full h-full opacity-50 group-hover:opacity-100 transition-opacity">
-             <polyline 
-               points={data.slice(-14).map((d, i) => `${(i / (Math.min(data.length, 14) - 1 || 1)) * 100},${20 - (d.percent/100)*20}`).join(' ')} 
-               fill="none" 
-               stroke="#22c55e" 
+             <polyline
+               points={data.slice(-14).map((d, i) => `${(i / (Math.min(data.length, 14) - 1 || 1)) * 100},${20 - (d.percent/100)*20}`).join(' ')}
+               fill="none"
+               stroke="#22c55e"
                strokeWidth="1.5"
                strokeLinejoin="round"
              />

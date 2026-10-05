@@ -17,7 +17,7 @@ export function MonthTooltip({ year, month, rect, data }: MonthTooltipProps) {
   const monthStart = new Date(year, month, 1);
   const daysInMonth = getDaysInMonth(monthStart);
   const monthPrefix = format(monthStart, 'yyyy-MM');
-  
+
   let completedDays = 0;
   let totalTasks = 0;
   let tasksCompleted = 0;
@@ -27,7 +27,7 @@ export function MonthTooltip({ year, month, rect, data }: MonthTooltipProps) {
   for (let i = 1; i <= daysInMonth; i++) {
     const dateStr = `${monthPrefix}-${i.toString().padStart(2, '0')}`;
     const info = getDayCompletionInfo(data, dateStr);
-    
+
     if (info.completed) {
       completedDays++;
       currentRun++;
@@ -35,7 +35,7 @@ export function MonthTooltip({ year, month, rect, data }: MonthTooltipProps) {
     } else {
       currentRun = 0;
     }
-    
+
     tasksCompleted += info.completedCount;
     totalTasks += info.totalCount;
   }
@@ -44,7 +44,7 @@ export function MonthTooltip({ year, month, rect, data }: MonthTooltipProps) {
   const incompleteDays = daysInMonth - completedDays;
 
   useEffect(() => {
-    const tooltipWidth = 220; 
+    const tooltipWidth = 220;
     let top = rect.top;
     let left = rect.right + 16;
 
@@ -60,7 +60,7 @@ export function MonthTooltip({ year, month, rect, data }: MonthTooltipProps) {
   if (!mounted) return null;
 
   return createPortal(
-    <div 
+    <div
       className="absolute z-[100] animate-pop pointer-events-none"
       style={{ top: position.top, left: position.left }}
     >
@@ -68,7 +68,7 @@ export function MonthTooltip({ year, month, rect, data }: MonthTooltipProps) {
         <div className="text-sm font-bold text-textMain mb-3 tracking-wide">
           {format(monthStart, 'MMMM yyyy').toUpperCase()}
         </div>
-        
+
         <div className="flex flex-col gap-2 mb-3 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-accent flex items-center gap-1.5">✓ Completed</span>
@@ -92,7 +92,7 @@ export function MonthTooltip({ year, month, rect, data }: MonthTooltipProps) {
             <div className="text-base font-semibold text-textMain">{bestStreak} days</div>
           </div>
         </div>
-        
+
         <div className="h-px w-full bg-border my-3" />
 
         <div className="flex items-center justify-between">

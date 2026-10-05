@@ -238,9 +238,9 @@ export function FriendsPage() {
             .select('id, username, display_name, full_name, avatar_url, bio, visibility')
             .ilike('username', `%${cleanQuery}%`)
             .limit(10);
-          
+
           if (fallbackError) throw { ...fallbackError, query: "profiles.select().ilike('username', ...)" };
-          
+
           if (fallbackData) {
             setSearchResults(fallbackData);
           }

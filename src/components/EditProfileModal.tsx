@@ -14,7 +14,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
+
   const [avatarLoading, setAvatarLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,7 +30,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
   const debouncedUsername = useDebounce(username, 500);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
 
-  const isDirty = 
+  const isDirty =
     username !== (profile?.username || '') ||
     displayName !== (profile?.display_name || profile?.full_name || '') ||
     bio !== (profile?.bio || '') ||
@@ -139,18 +139,18 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
       <div className="w-full max-w-2xl bg-surface border border-border/40 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        
+
         <div className="flex items-center justify-between p-6 border-b border-border/30">
           <h2 className="text-sm font-bold tracking-widest text-textMain uppercase">Edit Profile</h2>
           <button onClick={onClose} className="p-2 text-textMuted hover:text-textMain transition-colors"><X size={18} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 md:p-8 flex flex-col gap-10">
-          
+
           {/* Cover Section */}
           <div className="flex flex-col gap-2">
             <span className="text-[10px] font-bold tracking-widest text-textMuted uppercase">Cover Image</span>
-            <div 
+            <div
               className="relative w-full h-32 md:h-48 rounded-xl bg-surface border border-border/60 overflow-hidden flex items-center justify-center cursor-pointer group transition-all hover:border-textMuted/40"
               onClick={() => !coverLoading && coverInputRef.current?.click()}
             >
@@ -180,7 +180,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
 
           {/* Avatar Section */}
           <div className="flex items-center gap-6">
-            <div 
+            <div
               onClick={() => !avatarLoading && fileInputRef.current?.click()}
               className="group relative w-20 h-20 rounded-2xl bg-background border border-border/60 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer transition-all hover:border-textMuted/40"
             >
@@ -205,7 +205,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
               )}
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarLoading} />
             </div>
-            
+
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-bold tracking-widest text-textMuted uppercase">Profile Picture</span>
               <div className="flex items-center gap-4">
@@ -218,7 +218,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted">Display Name</label>
-              <input 
+              <input
                 type="text"
                 className="w-full bg-transparent border-b border-border/30 pb-2 text-lg font-bold text-textMain focus:outline-none focus:border-accent transition-colors"
                 value={displayName}
@@ -231,7 +231,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
               <label className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted">Username</label>
               <div className="relative w-full">
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 text-textMuted font-bold">@</span>
-                <input 
+                <input
                   type="text"
                   className={cn(
                     "w-full bg-transparent border-b border-border/30 pb-2 pl-6 text-lg font-bold text-textMain focus:outline-none transition-colors",
@@ -254,14 +254,14 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
                 <label className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted">Bio</label>
                 <span className={cn("text-[9px] font-mono", bio.length > 150 ? "text-red-400" : "text-textMuted/50")}>{bio.length} / 160</span>
               </div>
-              <textarea 
+              <textarea
                 className="w-full bg-background border border-border/30 rounded-lg p-3 text-sm font-medium text-textMain focus:outline-none focus:border-textMuted transition-colors resize-none"
                 value={bio} rows={3} maxLength={160} onChange={(e) => setBio(e.target.value)}
               />
             </div>
 
 
-            
+
             {errorMessage && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-xs font-bold font-mono">{errorMessage}</div>
             )}
@@ -272,7 +272,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
           <div className="text-[9px] font-bold tracking-widest uppercase text-textMuted">
             {isDirty && saveStatus === 'idle' ? <span className="text-yellow-500 animate-pulse">Unsaved Changes</span> : 'Up to date'}
           </div>
-          <button 
+          <button
             onClick={handleSave} disabled={!isDirty || saving || !username || usernameStatus === 'taken' || usernameStatus === 'invalid'}
             className="py-2 px-6 bg-textMain text-background hover:bg-white text-[10px] font-bold tracking-widest uppercase rounded disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
           >

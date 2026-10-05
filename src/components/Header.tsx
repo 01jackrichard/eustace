@@ -32,10 +32,10 @@ export function Header({ year, setYear, onExport, onImport, onClear }: HeaderPro
         <h1 className="text-2xl font-bold tracking-tight text-textMain">EUSTACE</h1>
         <p className="text-textMuted text-sm mt-1">Build your days. Build your year.</p>
       </div>
-      
+
       <div className="flex items-center gap-4">
         <div className="flex items-center bg-surface border border-border rounded-lg overflow-hidden p-1">
-          <button 
+          <button
             onClick={() => setYear(year - 1)}
             className="p-1.5 hover:bg-surfaceHover rounded text-textMuted hover:text-textMain transition-colors"
             aria-label="Previous Year"
@@ -43,7 +43,7 @@ export function Header({ year, setYear, onExport, onImport, onClear }: HeaderPro
             <ChevronLeft size={18} />
           </button>
           <span className="px-4 font-medium min-w-[4.5rem] text-center">{year}</span>
-          <button 
+          <button
             onClick={() => setYear(year + 1)}
             className="p-1.5 hover:bg-surfaceHover rounded text-textMuted hover:text-textMain transition-colors"
             aria-label="Next Year"
@@ -69,12 +69,12 @@ export function Header({ year, setYear, onExport, onImport, onClear }: HeaderPro
                 <Trash2 size={14} /> Clear All Data
               </button>
             </div>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              accept=".json" 
-              className="hidden" 
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".json"
+              className="hidden"
             />
           </div>
         </div>

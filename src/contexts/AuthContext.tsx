@@ -91,7 +91,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const local = DataManager.loadData();
     if (!local || Object.keys(local.days).length === 0) return;
 
-    const taskMap = new Map<string, string>(); 
+    const taskMap = new Map<string, string>();
 
     for (const rt of local.recurringTasks) {
       const { data: insertedTask, error } = await supabase.from('tasks').insert({
@@ -127,7 +127,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           recurring: 'none',
           created_at: dateStr
         }).select('id').single();
-        
+
         if (insertedTask && !error) {
           taskMap.set(t.id, insertedTask.id);
         }

@@ -14,15 +14,15 @@ export function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'about'>('overview');
-  
+
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const { data: productivityData } = useProductivityData(currentYear);
 
   const recentActivity = useMemo(() => {
     if (!productivityData) return [];
-    
+
     const activity: { date: Date, task: any }[] = [];
-    
+
     Object.entries(productivityData.days).forEach(([dateStr, dayData]) => {
       if (dayData.completedTaskIds && dayData.completedTaskIds.length > 0) {
         dayData.completedTaskIds.forEach(id => {
@@ -58,7 +58,7 @@ export function ProfilePage() {
 
   return (
     <div className="w-full min-h-screen pb-32 animate-fade-in relative">
-      
+
       {/* 1. PROFILE HEADER */}
       <div className="w-full h-48 md:h-64 bg-surface border-b border-border/30 relative overflow-hidden flex items-center justify-center">
         {profile.cover_image_url ? (
@@ -73,7 +73,7 @@ export function ProfilePage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 -mt-16 md:-mt-24 relative z-10 flex flex-col">
-        
+
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 md:gap-8 mb-8 md:mb-12">
           {/* 2. LARGE AVATAR */}
           <div className="flex items-end gap-6 md:gap-8">
@@ -102,22 +102,22 @@ export function ProfilePage() {
 
           {/* 4. ACTIONS */}
           <div className="flex flex-wrap items-center gap-3 mb-2 md:mb-6">
-            <button 
+            <button
               onClick={() => setIsEditing(true)}
               className="py-2.5 px-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors flex items-center gap-2"
             >
               <Settings2 size={14} /> Edit Profile
             </button>
-            
+
             {username && (
               <div className="flex items-center gap-2">
-                <Link 
+                <Link
                   to={`/u/${username}`}
                   className="py-2.5 px-6 bg-transparent border border-border/40 hover:border-textMuted/50 text-textMuted hover:text-textMain text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors flex items-center gap-2"
                 >
                   <ExternalLink size={14} /> View
                 </Link>
-                <button 
+                <button
                   onClick={copyProfileLink}
                   className="w-10 h-10 flex items-center justify-center bg-transparent border border-border/40 hover:border-textMuted/50 text-textMuted hover:text-textMain rounded-full transition-colors"
                   title="Copy Profile Link"
@@ -153,7 +153,7 @@ export function ProfilePage() {
 
         {/* 6. TABS */}
         <div className="flex items-center gap-8 border-b border-border/20 mb-10">
-          <button 
+          <button
             onClick={() => setActiveTab('overview')}
             className={cn(
               "pb-4 text-[10px] font-bold tracking-[0.2em] uppercase transition-colors relative",
@@ -163,7 +163,7 @@ export function ProfilePage() {
             Overview
             {activeTab === 'overview' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-textMain" />}
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('about')}
             className={cn(
               "pb-4 text-[10px] font-bold tracking-[0.2em] uppercase transition-colors relative",
@@ -199,10 +199,10 @@ export function ProfilePage() {
                 </div>
                 {productivityData ? (
                   <div className="-mx-4 sm:mx-0 px-4 sm:px-0">
-                    <ContributionGraph 
-                      year={currentYear} 
-                      data={productivityData} 
-                      onDayClick={() => {}} 
+                    <ContributionGraph
+                      year={currentYear}
+                      data={productivityData}
+                      onDayClick={() => {}}
                     />
                   </div>
                 ) : (

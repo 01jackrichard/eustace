@@ -24,7 +24,7 @@ export function PublicProfilePage() {
   useEffect(() => {
     async function fetchPublicProfile() {
       if (!username) return;
-      
+
       const cleanUsername = username.trim().toLowerCase().replace(/^@+/, '');
       console.log('[PROFILE] username requested:', username);
       console.log('[PROFILE] authenticated user id:', user?.id);
@@ -40,7 +40,7 @@ export function PublicProfilePage() {
         console.error('[PROFILE] profile error code:', error.code);
         console.error('[PROFILE] profile error message:', error.message);
       }
-      
+
       if (error) {
         setDetailedError(error);
         setError(true);
@@ -56,7 +56,7 @@ export function PublicProfilePage() {
         setLoading(false);
       }
     }
-    
+
     fetchPublicProfile();
   }, [username, user]);
 
@@ -69,7 +69,7 @@ export function PublicProfilePage() {
       .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
       .neq('status', 'cancelled')
       .neq('status', 'declined');
-    
+
     if (data) {
       const rel = data.find(f => f.requester_id === targetId || f.addressee_id === targetId);
       setFriendship(rel || null);
@@ -129,11 +129,11 @@ export function PublicProfilePage() {
           {detailedError ? 'Database Error' : 'User Not Found'}
         </h1>
         <p className="text-textMuted text-sm mb-4">
-          {detailedError 
-            ? `The database returned an error: ${detailedError.message}. Make sure you have run the required SQL migration.` 
+          {detailedError
+            ? `The database returned an error: ${detailedError.message}. Make sure you have run the required SQL migration.`
             : `The profile @${username} does not exist.`}
         </p>
-        
+
         {detailedError && (
           <div className="text-left w-full bg-surfaceDark border border-border/30 p-4 rounded text-xs font-mono text-textMuted/70 overflow-auto whitespace-pre-wrap">
             {JSON.stringify(detailedError, null, 2)}
@@ -155,7 +155,7 @@ export function PublicProfilePage() {
 
   return (
     <div className="w-full min-h-screen pb-32 animate-fade-in relative">
-      
+
       {/* 1. PROFILE HEADER */}
       <div className="w-full h-48 md:h-64 bg-surface border-b border-border/30 relative overflow-hidden flex items-center justify-center">
         {profile.cover_image_url ? (
@@ -169,7 +169,7 @@ export function PublicProfilePage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 md:px-8 -mt-16 md:-mt-24 relative z-10 flex flex-col">
-        
+
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 md:gap-8 mb-8 md:mb-12">
           {/* 2. LARGE AVATAR */}
           <div className="flex items-end gap-6 md:gap-8">
@@ -199,7 +199,7 @@ export function PublicProfilePage() {
             {user && (
               <>
                 {currentStatus === 'you' && (
-                  <Link 
+                  <Link
                     to="/profile"
                     className="py-2.5 px-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors flex items-center gap-2"
                   >
@@ -217,9 +217,9 @@ export function PublicProfilePage() {
                   </span>
                 )}
                 {currentStatus === 'received' && (
-                  <button 
-                    onClick={handleAccept} 
-                    disabled={actionLoading} 
+                  <button
+                    onClick={handleAccept}
+                    disabled={actionLoading}
                     className="py-2.5 px-6 bg-accent text-background hover:bg-accent/90 text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
                     {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
@@ -227,9 +227,9 @@ export function PublicProfilePage() {
                   </button>
                 )}
                 {currentStatus === 'none' && (
-                  <button 
-                    onClick={handleAddFriend} 
-                    disabled={actionLoading} 
+                  <button
+                    onClick={handleAddFriend}
+                    disabled={actionLoading}
                     className="py-2.5 px-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
                     {actionLoading ? <Loader2 size={14} className="animate-spin" /> : 'Add Friend'}
@@ -238,7 +238,7 @@ export function PublicProfilePage() {
               </>
             )}
             {!user && (
-              <Link 
+              <Link
                 to="/signup"
                 className="py-2.5 px-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors flex items-center gap-2"
               >
@@ -250,7 +250,7 @@ export function PublicProfilePage() {
 
         {/* 5. TABS */}
         <div className="flex items-center gap-8 border-b border-border/20 mb-10 pt-4">
-          <button 
+          <button
             onClick={() => setActiveTab('overview')}
             className={cn(
               "pb-4 text-[10px] font-bold tracking-[0.2em] uppercase transition-colors relative",
@@ -260,7 +260,7 @@ export function PublicProfilePage() {
             Overview
             {activeTab === 'overview' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-textMain" />}
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('about')}
             className={cn(
               "pb-4 text-[10px] font-bold tracking-[0.2em] uppercase transition-colors relative",
@@ -294,13 +294,13 @@ export function PublicProfilePage() {
                     </div>
                   </div>
                 </div>
-                
+
                 {productivityData ? (
                   <div className="-mx-4 sm:mx-0 px-4 sm:px-0">
-                    <ContributionGraph 
-                      year={currentYear} 
-                      data={productivityData} 
-                      onDayClick={() => {}} 
+                    <ContributionGraph
+                      year={currentYear}
+                      data={productivityData}
+                      onDayClick={() => {}}
                     />
                   </div>
                 ) : (

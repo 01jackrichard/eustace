@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 export function SettingsPage() {
   const { user, profile, signOut } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  
+
   const activeTab = searchParams.get('section') || 'account';
   const setActiveTab = (tab: string) => setSearchParams({ section: tab });
 
@@ -70,13 +70,13 @@ export function SettingsPage() {
     if (!password) { setPasswordError('Password is required.'); return; }
     if (password !== confirmPassword) { setPasswordError('Passwords do not match.'); return; }
     if (password.length < 6) { setPasswordError('Password must be at least 6 characters.'); return; }
-    
+
     setIsUpdatingPassword(true);
     setPasswordError('');
     setPasswordSuccess(false);
-    
+
     const { error } = await supabase.auth.updateUser({ password });
-    
+
     setIsUpdatingPassword(false);
     if (error) {
       setPasswordError(error.message);
@@ -116,7 +116,7 @@ export function SettingsPage() {
 
   return (
     <div className="max-w-5xl mx-auto w-full pt-12 md:pt-24 pb-32 px-4 md:px-8 animate-fade-in flex flex-col">
-      
+
       {/* Header */}
       <div className="mb-12 flex items-center justify-between">
         <div>
@@ -131,7 +131,7 @@ export function SettingsPage() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-12 md:gap-24 items-start">
-        
+
         {/* Left Nav */}
         <nav className="w-full md:w-56 shrink-0 flex flex-row md:flex-col gap-4 md:gap-8 overflow-x-auto md:overflow-visible pb-4 md:pb-0 custom-scrollbar">
           {navGroups.map((group, i) => (
@@ -156,8 +156,8 @@ export function SettingsPage() {
                       onClick={() => setActiveTab(item.id)}
                       className={cn(
                         "text-left px-4 py-2 md:px-3 md:py-2 rounded-md text-sm font-medium transition-colors duration-200 whitespace-nowrap",
-                        activeTab === item.id 
-                          ? "bg-accent/10 text-accent font-bold" 
+                        activeTab === item.id
+                          ? "bg-accent/10 text-accent font-bold"
                           : "text-textMain hover:bg-surface/50 hover:text-textMain"
                       )}
                     >
@@ -168,10 +168,10 @@ export function SettingsPage() {
               </div>
             </div>
           ))}
-          
+
           <div className="hidden md:block w-full h-px bg-border/20 my-2" />
-          
-          <button 
+
+          <button
             onClick={signOut}
             className="flex items-center gap-2 text-left px-4 py-2 md:px-3 rounded-md text-sm font-bold text-red-400 hover:bg-red-400/10 transition-colors duration-200 shrink-0 whitespace-nowrap"
           >
@@ -181,14 +181,14 @@ export function SettingsPage() {
 
         {/* Right Content */}
         <div className="flex-1 w-full flex flex-col">
-          
+
           {activeTab === 'account' && (
             <div className="animate-fade-in">
               <h2 className="text-xl font-bold text-textMain mb-2">Account</h2>
               <p className="text-sm text-textMuted mb-10">Manage your account information.</p>
-              
+
               <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted mb-4 border-b border-border/20 pb-2">Profile</h3>
-              
+
               <div className="flex flex-col md:flex-row md:items-center justify-between py-6 border-b border-border/10 gap-4">
                 <div className="flex flex-col">
                   <span className="text-sm font-bold text-textMain">Avatar</span>
@@ -274,20 +274,20 @@ export function SettingsPage() {
                       <span className="text-sm font-bold text-textMain">Email notifications</span>
                       <span className="text-xs font-medium text-textMuted">Receive Eustace updates by email when email delivery is available.</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => updatePreference('email_notifications', !prefs.email_notifications)}
                       className={cn("w-10 h-5 rounded-full relative transition-colors duration-200", prefs.email_notifications ? "bg-accent" : "bg-border/30")}
                     >
                       <div className={cn("w-4 h-4 bg-white rounded-full absolute top-0.5 transition-transform duration-200", prefs.email_notifications ? "right-0.5" : "left-0.5")} />
                     </button>
                   </div>
-                  
+
                   <div className="flex flex-col md:flex-row md:items-center justify-between py-6 border-b border-border/10 gap-4">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-textMain">Friend requests</span>
                       <span className="text-xs font-medium text-textMuted">Get notified when someone adds you.</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => updatePreference('friend_request_notifications', !prefs.friend_request_notifications)}
                       className={cn("w-10 h-5 rounded-full relative transition-colors duration-200", prefs.friend_request_notifications ? "bg-accent" : "bg-border/30")}
                     >
@@ -300,7 +300,7 @@ export function SettingsPage() {
                       <span className="text-sm font-bold text-textMain">Productivity reminders</span>
                       <span className="text-xs font-medium text-textMuted">Nudges to keep your streak alive.</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => updatePreference('productivity_reminders', !prefs.productivity_reminders)}
                       className={cn("w-10 h-5 rounded-full relative transition-colors duration-200", prefs.productivity_reminders ? "bg-accent" : "bg-border/30")}
                     >
@@ -323,24 +323,24 @@ export function SettingsPage() {
                 <div className="flex flex-col">
                   <span className="text-sm font-bold text-textMain mb-4">Change Password</span>
                   <div className="flex flex-col gap-4 max-w-sm">
-                    <input 
-                      type="password" 
-                      placeholder="New password" 
+                    <input
+                      type="password"
+                      placeholder="New password"
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       className="w-full bg-surface border border-border/30 rounded-md px-4 py-2 text-sm text-textMain focus:outline-none focus:border-accent"
                     />
-                    <input 
-                      type="password" 
-                      placeholder="Confirm new password" 
+                    <input
+                      type="password"
+                      placeholder="Confirm new password"
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
                       className="w-full bg-surface border border-border/30 rounded-md px-4 py-2 text-sm text-textMain focus:outline-none focus:border-accent"
                     />
                     {passwordError && <span className="text-xs font-bold text-red-400">{passwordError}</span>}
                     {passwordSuccess && <span className="text-xs font-bold text-accent">Password updated successfully.</span>}
-                    <button 
-                      onClick={handleUpdatePassword} 
+                    <button
+                      onClick={handleUpdatePassword}
                       disabled={isUpdatingPassword}
                       className="px-4 py-2 bg-accent text-background rounded-md text-xs font-bold transition-colors w-max hover:bg-accentHover disabled:opacity-50"
                     >
@@ -349,7 +349,7 @@ export function SettingsPage() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex flex-col md:flex-row md:items-center justify-between py-6 border-b border-border/10 gap-4">
                 <div className="flex flex-col">
                   <span className="text-sm font-bold text-textMain">Sessions</span>
@@ -357,39 +357,39 @@ export function SettingsPage() {
                 </div>
                 <div className="flex gap-4">
                   <button onClick={signOut} className="px-4 py-2 bg-surface border border-border/30 rounded text-xs font-bold text-textMain hover:text-red-400 hover:border-red-400 transition-colors">Log out</button>
-                  
+
                 </div>
               </div>
 
               <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-red-500 mt-16 mb-4 border-b border-red-500/20 pb-2">Danger Zone</h3>
-              
+
               <div className="flex flex-col md:flex-row md:items-start justify-between py-6 gap-4">
                 <div className="flex flex-col max-w-sm">
                   <span className="text-sm font-bold text-red-400 mb-1">Delete account</span>
                   <span className="text-xs font-medium text-textMuted">Permanently delete your Eustace account and all associated data. This action cannot be undone.</span>
                 </div>
-                
+
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] font-bold uppercase text-textMuted tracking-wider">Type DELETE to confirm</span>
-                    <input 
-                      type="text" 
-                      placeholder="DELETE" 
+                    <input
+                      type="text"
+                      placeholder="DELETE"
                       value={deleteConfirmText}
                       onChange={e => setDeleteConfirmText(e.target.value)}
                       className="w-full bg-surface border border-border/30 rounded-md px-4 py-2 text-sm text-textMain focus:outline-none focus:border-red-500/50"
                     />
                   </div>
                   <div className="flex gap-2 justify-end">
-                    <button 
+                    <button
                       onClick={() => setDeleteConfirmText('')}
                       className="px-4 py-2 bg-surface border border-border/30 rounded text-[10px] font-bold tracking-[0.2em] text-textMuted hover:text-textMain transition-colors uppercase"
                     >
                       Cancel
                     </button>
-                    <button 
-                      onClick={handleDeleteAccount} 
-                      disabled={isDeleting || deleteConfirmText !== 'DELETE'} 
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={isDeleting || deleteConfirmText !== 'DELETE'}
                       className="px-6 py-2 bg-red-500/10 border border-red-500/30 rounded text-[10px] font-bold tracking-[0.2em] text-red-400 hover:bg-red-500 hover:text-white transition-colors uppercase disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isDeleting ? 'Deleting...' : 'Delete Account'}

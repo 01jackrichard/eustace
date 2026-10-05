@@ -13,7 +13,7 @@ interface PublicIntroProps {
 export function PublicIntro({ onComplete }: PublicIntroProps) {
   const containerRef = useRef<HTMLHeadingElement>(null);
   const [phase, setPhase] = useState<'initial' | 'transition' | 'finish'>('initial');
-  
+
   // Store old rects before React removes them
   const oldRectsRef = useRef<DOMRect[]>([]);
 
@@ -38,7 +38,7 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
 
       const newSpans = Array.from(container.children) as HTMLSpanElement[];
       const oldRects = oldRectsRef.current;
-      
+
       // Fallback if measurement failed
       if (oldRects.length === 0 || newSpans.length === 0) return;
 
@@ -77,7 +77,7 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
 
       // Play FLIP animation
       newSpans.forEach((span, i) => {
-        const stagger = (i / newSpans.length) * 300; 
+        const stagger = (i / newSpans.length) * 300;
         span.style.transition = `transform 1.8s cubic-bezier(0.22, 1, 0.36, 1) ${stagger}ms, opacity 1.2s ease-out ${stagger}ms, filter 1.2s ease-out ${stagger}ms, color 0.1s`;
         span.style.transform = 'translate(0, 0) scale(1)';
         span.style.opacity = '1';
@@ -95,8 +95,8 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
 
         newSpans.forEach((span, i) => {
           if (TARGET[i] === ' ') return;
-          
-          const resolveThreshold = 0.5 + (i / newSpans.length) * 0.4; 
+
+          const resolveThreshold = 0.5 + (i / newSpans.length) * 0.4;
 
           if (progress < resolveThreshold) {
             if (Math.random() > 0.6) {
@@ -131,13 +131,13 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
       </div>
 
       <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6">
-        <h1 
+        <h1
           ref={containerRef}
           className={cn(
             "text-white mix-blend-plus-lighter text-center max-w-[95vw] leading-[1.2]",
             phase === 'initial' ? "text-[clamp(60px,8vw,120px)]" : "text-[clamp(28px,5vw,72px)]"
           )}
-          style={{ 
+          style={{
             fontFamily: "'Syncopate', sans-serif",
             fontWeight: 700,
             letterSpacing: '-0.04em'
@@ -157,7 +157,7 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
 
       <AnimatePresence>
         {phase === 'finish' && (
-          <motion.div 
+          <motion.div
             className="absolute inset-0 bg-[#050505] z-50 pointer-events-none"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

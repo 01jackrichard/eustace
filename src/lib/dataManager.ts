@@ -77,7 +77,7 @@ export const DataManager = {
   migrateData: (oldData: any): AppData => {
     if (!oldData) return DataManager.getDefaultData();
     if (oldData.version === 2) return oldData;
-    
+
     const newData = DataManager.getDefaultData();
     for (const [dateStr, isCompleted] of Object.entries(oldData)) {
       if (typeof isCompleted === 'boolean' && isCompleted) {
@@ -96,7 +96,7 @@ export const DataManager = {
   clearData: () => {
     localStorage.removeItem(STORAGE_KEY);
   },
-  
+
   exportData: () => {
     const data = DataManager.loadData();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -107,7 +107,7 @@ export const DataManager = {
     a.click();
     URL.revokeObjectURL(url);
   },
-  
+
   importData: (jsonStr: string): AppData | null => {
     try {
       const parsed = JSON.parse(jsonStr);
@@ -124,7 +124,7 @@ export const DataManager = {
 export const getTasksForDate = (data: AppData, dateStr: string): Task[] => {
   const dayData = data.days[dateStr];
   const specificTasks = dayData?.tasks || [];
-  
+
   const targetDate = parseISO(dateStr);
   const targetDayOfWeek = getDay(targetDate);
 
@@ -132,41 +132,44 @@ export const getTasksForDate = (data: AppData, dateStr: string): Task[] => {
     const meta = parseTaskMetadata(task);
     const startStr = meta.startDate || task.createdAt;
     const createdDate = parseISO(startStr);
-    
+
     // Check start date
     if (isBefore(targetDate, startOfDay(createdDate))) return false;
-    
+
     // Check end date
     if (meta.endDate && isBefore(parseISO(meta.endDate), startOfDay(targetDate))) return false;
-    
+
+    // Do not show skipped occurrences
+    if (meta.skippedDates?.includes(dateStr)) return false;
+
     if (task.recurring === 'daily') return true;
     if (task.recurring === 'weekdays') return targetDayOfWeek >= 1 && targetDayOfWeek <= 5;
     if (task.recurring === 'weekly') return getDay(createdDate) === targetDayOfWeek;
-    
+
     if (task.recurring === 'custom' && meta.rrule) {
       try {
         const rule = RRule.fromString(meta.rrule);
         // RRule uses UTC dates. We need to convert our local targetDate to UTC for matching
         const utcTarget = new Date(Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()));
-        
+
         // Find occurrences around the target date
         const occurrences = rule.between(
-           new Date(utcTarget.getTime() - 24 * 60 * 60 * 1000), 
-           new Date(utcTarget.getTime() + 24 * 60 * 60 * 1000), 
+           new Date(utcTarget.getTime() - 24 * 60 * 60 * 1000),
+           new Date(utcTarget.getTime() + 24 * 60 * 60 * 1000),
            true
         );
-        
+
         // Check if any occurrence matches our target day
-        return occurrences.some(d => 
-          d.getUTCFullYear() === targetDate.getFullYear() && 
-          d.getUTCMonth() === targetDate.getMonth() && 
+        return occurrences.some(d =>
+          d.getUTCFullYear() === targetDate.getFullYear() &&
+          d.getUTCMonth() === targetDate.getMonth() &&
           d.getUTCDate() === targetDate.getDate()
         );
       } catch (e) {
         return false;
       }
     }
-    
+
     return false;
   });
 
@@ -176,7 +179,7 @@ export const getTasksForDate = (data: AppData, dateStr: string): Task[] => {
 export const getDayCompletionInfo = (data: AppData, dateStr: string) => {
   const dayData = data.days[dateStr];
   const allTasks = getTasksForDate(data, dateStr);
-  
+
   // Exclude cancelled tasks from total count
   const validTasks = allTasks.filter(t => {
     const meta = parseTaskMetadata(t);
@@ -185,9 +188,9 @@ export const getDayCompletionInfo = (data: AppData, dateStr: string) => {
     // We keep skipped tasks in the total tasks (so percent drops)
     return true;
   });
-  
+
   const totalTasks = validTasks.length;
-  
+
   if (totalTasks === 0) {
     const isManuallyCompleted = !!dayData?.manualCompletion;
     return {
@@ -200,7 +203,7 @@ export const getDayCompletionInfo = (data: AppData, dateStr: string) => {
 
   const completedCount = validTasks.filter(t => dayData?.completedTaskIds.includes(t.id)).length;
   const percent = Math.round((completedCount / totalTasks) * 100);
-  
+
   return {
     completed: percent === 100,
     percent,
@@ -212,9 +215,9 @@ export const getDayCompletionInfo = (data: AppData, dateStr: string) => {
 export const calculateStats = (data: AppData, year: number) => {
   let completedDays = 0;
   let totalTasksCompleted = 0;
-  
+
   const allCompletedDates: Date[] = [];
-  
+
   Object.keys(data.days).forEach(dateStr => {
     const info = getDayCompletionInfo(data, dateStr);
     if (info.completed) {
@@ -232,7 +235,7 @@ export const calculateStats = (data: AppData, year: number) => {
   let longestStreak = 0;
   let currentRun = 0;
   let prevDate: Date | null = null;
-  
+
   for (const date of allCompletedDates) {
     if (!prevDate) {
       currentRun = 1;
@@ -249,15 +252,15 @@ export const calculateStats = (data: AppData, year: number) => {
     }
     prevDate = date;
   }
-  
+
   const today = startOfDay(new Date());
   const yesterday = subDays(today, 1);
-  
+
   if (allCompletedDates.length > 0) {
     let tempStreak = 0;
     const todayStr = format(today, 'yyyy-MM-dd');
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-    
+
     if (getDayCompletionInfo(data, todayStr).completed) {
        let cur = today;
        while (getDayCompletionInfo(data, format(cur, 'yyyy-MM-dd')).completed) {
