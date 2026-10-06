@@ -37,8 +37,14 @@ export function Signup() {
     setLoading(true);
     setError('');
 
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      setLoading(false);
+      return;
+    }
+
     // Check if username exists
-    const { data: existingUser } = await supabase.from('profiles').select('id').eq('username', username).single();
+    const { data: existingUser } = await supabase.from('profiles').select('id').eq('username', username).maybeSingle();
     if (existingUser) {
       setError('Username is already taken.');
       setLoading(false);
@@ -49,21 +55,33 @@ export function Signup() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: {
+          username,
+          full_name: name,
+          name
+        }
       }
     });
 
     if (authError) {
       setError(authError.message);
     } else if (authData.user) {
-      // Create profile
-      await supabase.from('profiles').insert({
-        id: authData.user.id,
-        username,
-        full_name: name,
-        visibility: 'public'
-      });
-      navigate('/dashboard');
+      if (authData.session) {
+        // Fallback upsert in case trigger is pending
+        await supabase.from('profiles').upsert({
+          id: authData.user.id,
+          username,
+          full_name: name,
+          display_name: name,
+          visibility: 'public',
+          activity_visibility: 'public'
+        }, { onConflict: 'id' });
+        navigate('/dashboard');
+      } else {
+        // Confirmation email required by Supabase auth configuration
+        setError('Please check your email to confirm your account before logging in.');
+      }
     }
     
     setLoading(false);

@@ -86,5 +86,28 @@ export default defineConfig({
         enabled: false // Don't enable in dev unless needed, can cause caching issues during development
       }
     })
-  ]
+  ],
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'vendor';
+            }
+            if (id.includes('lucide-react') || id.includes('framer-motion') || id.includes('react-hot-toast')) {
+              return 'ui';
+            }
+            if (id.includes('@supabase')) {
+              return 'supabase';
+            }
+            if (id.includes('date-fns') || id.includes('rrule')) {
+              return 'date';
+            }
+          }
+        }
+      }
+    }
+  }
 })

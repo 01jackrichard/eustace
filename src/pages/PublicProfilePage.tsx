@@ -12,13 +12,12 @@ export function PublicProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [detailedError, setDetailedError] = useState<any>(null);
   const { user } = useAuth();
   const [friendship, setFriendship] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'about'>('overview');
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const { data: productivityData } = usePublicProductivityData(profile?.id || '', currentYear);
+  const { data: productivityData, error: productivityError } = usePublicProductivityData(profile?.id || '', currentYear);
 
 
   useEffect(() => {
@@ -42,7 +41,6 @@ export function PublicProfilePage() {
       }
 
       if (error) {
-        setDetailedError(error);
         setError(true);
         setLoading(false);
       } else if (!profileData) {
@@ -124,24 +122,16 @@ export function PublicProfilePage() {
   if (error || !profile) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center gap-6 animate-fade-in max-w-lg mx-auto">
-        <div className="text-[10px] font-bold tracking-[0.3em] uppercase text-textMuted">Error</div>
+        <div className="text-[10px] font-bold tracking-[0.3em] uppercase text-textMuted">Profile</div>
         <h1 className="text-3xl md:text-5xl font-black text-textMain tracking-tighter uppercase">
-          {detailedError ? 'Database Error' : 'User Not Found'}
+          User Not Found
         </h1>
         <p className="text-textMuted text-sm mb-4">
-          {detailedError
-            ? `The database returned an error: ${detailedError.message}. Make sure you have run the required SQL migration.`
-            : `The profile @${username} does not exist.`}
+          The profile @{username} does not exist or is currently unavailable.
         </p>
 
-        {detailedError && (
-          <div className="text-left w-full bg-surfaceDark border border-border/30 p-4 rounded text-xs font-mono text-textMuted/70 overflow-auto whitespace-pre-wrap">
-            {JSON.stringify(detailedError, null, 2)}
-          </div>
-        )}
-
-        <Link to="/friends" className="text-[10px] font-bold tracking-widest text-textMain uppercase hover:text-accent transition-colors flex items-center gap-2 mt-4">
-          <ArrowLeft size={14} /> Back to Friends
+        <Link to="/" className="text-[10px] font-bold tracking-widest text-textMain uppercase hover:text-accent transition-colors flex items-center gap-2 mt-4">
+          <ArrowLeft size={14} /> Back to Eustace
         </Link>
       </div>
     );
@@ -295,7 +285,17 @@ export function PublicProfilePage() {
                   </div>
                 </div>
 
-                {productivityData ? (
+                {productivityError ? (
+                  <div className="p-8 border border-border/20 rounded-2xl bg-surface/30 flex items-center justify-center text-center">
+                    <span className="text-xs font-medium text-textMuted/70">
+                      {productivityError === 'private'
+                        ? 'Activity history is set to private.'
+                        : productivityError === 'friends_only'
+                        ? 'Activity history is visible to friends only.'
+                        : 'Activity data unavailable.'}
+                    </span>
+                  </div>
+                ) : productivityData ? (
                   <div className="-mx-4 sm:mx-0 px-4 sm:px-0">
                     <ContributionGraph
                       year={currentYear}

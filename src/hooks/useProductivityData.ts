@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { AppData, Task, DailyData, TaskMetadata } from '../lib/dataManager';
 import { calculateStats, parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
+import { addDays, parseISO, format } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export function useProductivityData(year: number) {
@@ -16,9 +17,24 @@ export function useProductivityData(year: number) {
       return;
     }
 
-    const { data: dbTasks } = await supabase.from('tasks').select('*').eq('user_id', user.id);
-    const { data: dbCompletions } = await supabase.from('task_completions').select('*').eq('user_id', user.id);
-    const { data: dbDailyData } = await supabase.from('daily_data').select('*').eq('user_id', user.id);
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+
+    const [tasksRes, completionsRes, dailyRes] = await Promise.all([
+      supabase.from('tasks').select('*').eq('user_id', user.id),
+      supabase.from('task_completions').select('*')
+        .eq('user_id', user.id)
+        .gte('completed_date', startDate)
+        .lte('completed_date', endDate),
+      supabase.from('daily_data').select('*')
+        .eq('user_id', user.id)
+        .gte('date', startDate)
+        .lte('date', endDate)
+    ]);
+
+    const dbTasks = tasksRes.data;
+    const dbCompletions = completionsRes.data;
+    const dbDailyData = dailyRes.data;
 
     const days: Record<string, DailyData> = {};
     const recurringTasks: Task[] = [];
@@ -124,7 +140,7 @@ export function useProductivityData(year: number) {
         metadata: meta
       };
 
-      const newData = { ...data };
+      const newData = structuredClone(data);
       if (newTask.recurring !== 'none') {
         newData.recurringTasks.push(newTask);
       } else {
@@ -154,7 +170,7 @@ export function useProductivityData(year: number) {
       .select().single();
 
     if (updated && !error) {
-      const newData = { ...data };
+      const newData = structuredClone(data);
       if (task.recurring !== 'none') {
         newData.recurringTasks = newData.recurringTasks.map(t => t.id === task.id ? task : t);
       } else {
@@ -177,8 +193,8 @@ export function useProductivityData(year: number) {
     const dayData = data.days[dateStr] || { tasks: [], completedTaskIds: [] };
     const isCompleted = dayData.completedTaskIds.includes(taskId);
 
-    const previousData = { ...data };
-    const newData = { ...data };
+    const previousData = structuredClone(data);
+    const newData = structuredClone(data);
     if (!newData.days[dateStr]) newData.days[dateStr] = { tasks: [], completedTaskIds: [] };
 
     if (isCompleted) {
@@ -217,12 +233,12 @@ export function useProductivityData(year: number) {
         toast.success('Task skipped for today');
       }
     } else {
-      // Non-recurring: move to tomorrow
-      const tomorrowStr = new Date(new Date(dateStr).getTime() + 86400000).toISOString().split('T')[0];
+      // Non-recurring: move to tomorrow using calendar-aware date addition
+      const tomorrowStr = format(addDays(parseISO(dateStr), 1), 'yyyy-MM-dd');
       const updatedTask = { ...task, createdAt: tomorrowStr };
 
-      const previousData = { ...data };
-      const newData = { ...data };
+      const previousData = structuredClone(data);
+      const newData = structuredClone(data);
       if (newData.days[dateStr]) {
         newData.days[dateStr].tasks = newData.days[dateStr].tasks.filter(t => t.id !== taskId);
       }
@@ -245,16 +261,19 @@ export function useProductivityData(year: number) {
   const updateNote = async (dateStr: string, note: string) => {
     if (!user || !data) return;
 
-    const newData = { ...data };
+    const previousData = structuredClone(data);
+    const newData = structuredClone(data);
     if (!newData.days[dateStr]) newData.days[dateStr] = { tasks: [], completedTaskIds: [] };
     newData.days[dateStr].note = note;
     setData(newData);
 
-    const { data: existing } = await supabase.from('daily_data').select('id').match({ user_id: user.id, date: dateStr }).single();
-    if (existing) {
-      await supabase.from('daily_data').update({ note }).match({ id: existing.id });
-    } else {
-      await supabase.from('daily_data').insert({ user_id: user.id, date: dateStr, note });
+    const { error } = await supabase.from('daily_data').upsert(
+      { user_id: user.id, date: dateStr, note },
+      { onConflict: 'user_id,date' }
+    );
+    if (error) {
+      setData(previousData);
+      toast.error('Failed to save note');
     }
   };
 
@@ -264,24 +283,27 @@ export function useProductivityData(year: number) {
     const isManuallyCompleted = !!data.days[dateStr]?.manualCompletion;
     const nextState = !isManuallyCompleted;
 
-    const newData = { ...data };
+    const previousData = structuredClone(data);
+    const newData = structuredClone(data);
     if (!newData.days[dateStr]) newData.days[dateStr] = { tasks: [], completedTaskIds: [] };
     newData.days[dateStr].manualCompletion = nextState;
     setData(newData);
 
-    const { data: existing } = await supabase.from('daily_data').select('id').match({ user_id: user.id, date: dateStr }).single();
-    if (existing) {
-      await supabase.from('daily_data').update({ manual_completion: nextState }).match({ id: existing.id });
-    } else {
-      await supabase.from('daily_data').insert({ user_id: user.id, date: dateStr, manual_completion: nextState });
+    const { error } = await supabase.from('daily_data').upsert(
+      { user_id: user.id, date: dateStr, manual_completion: nextState },
+      { onConflict: 'user_id,date' }
+    );
+    if (error) {
+      setData(previousData);
+      toast.error('Failed to update completion status');
     }
   };
 
   const deleteTask = async (taskId: string, dateStr: string, isRecurring: boolean) => {
     if (!user || !data) return;
 
-    const previousData = { ...data };
-    const newData = { ...data };
+    const previousData = structuredClone(data);
+    const newData = structuredClone(data);
 
     if (isRecurring) {
       newData.recurringTasks = newData.recurringTasks.filter(t => t.id !== taskId);
