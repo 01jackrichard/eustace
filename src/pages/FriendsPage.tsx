@@ -260,7 +260,7 @@ export function FriendsPage() {
   const handleAddFriend = async (targetUserId: string) => {
     if (!user) return;
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('friendships')
       .insert({ requester_id: user.id, addressee_id: targetUserId, status: 'pending' })
       .select()
@@ -275,7 +275,7 @@ export function FriendsPage() {
 
   const handleAccept = async (friendshipId: string) => {
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('friendships')
       .update({ status: 'accepted', updated_at: new Date().toISOString() })
       .eq('id', friendshipId)

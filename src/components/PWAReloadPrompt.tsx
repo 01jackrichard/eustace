@@ -6,10 +6,10 @@ export function PWAReloadPrompt() {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
-    onRegistered(r) {
+    onRegistered() {
 
     },
-    onRegisterError(error) {
+    onRegisterError() {
 
     },
   });
