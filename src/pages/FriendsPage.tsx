@@ -4,14 +4,6 @@ import { supabase } from '../lib/supabase';
 import { Loader2, Check, X, Search } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { Link } from 'react-router-dom';
-import { calculateStats } from '../lib/dataManager';
-import type { AppData, Task, DailyData } from '../lib/dataManager';
-
-// =========================================================
-// SCHEMA NOTE: The friendships table has columns:
-//   requester_id, addressee_id, status
-// DO NOT use "addressee_id" — that column does NOT exist.
-// =========================================================
 
 type Profile = {
   id: string;
@@ -26,7 +18,7 @@ type Profile = {
 type Friendship = {
   id: string;
   requester_id: string;
-  addressee_id: string;  // The actual DB column
+  addressee_id: string;
   status: 'pending' | 'accepted' | 'declined' | 'cancelled';
   created_at: string;
   profiles: Profile;
@@ -38,34 +30,6 @@ type DetailedError = {
   details?: string;
   query?: string;
 };
-
-function parseRPCData(result: any): AppData {
-  if (!result || result.error) return { version: 2, settings: { theme: 'dark', weekStartsOn: 1 }, recurringTasks: [], days: {} };
-  const dbTasks = result.tasks || [];
-  const dbCompletions = result.completions || [];
-  const dbDailyData = result.daily_data || [];
-  const recurringTasks: Task[] = [];
-  const days: Record<string, DailyData> = {};
-  for (const t of dbTasks) {
-    const task: Task = { id: t.id, name: 'Private Task', description: t.description, recurring: t.recurring, createdAt: t.created_at.split('T')[0] };
-    if (task.recurring && task.recurring !== 'none') {
-      recurringTasks.push(task);
-    } else {
-      if (!days[task.createdAt]) days[task.createdAt] = { tasks: [], completedTaskIds: [], manualCompletion: false };
-      days[task.createdAt].tasks.push(task);
-    }
-  }
-  for (const d of dbDailyData) {
-    if (!days[d.date]) days[d.date] = { tasks: [], completedTaskIds: [], manualCompletion: false };
-    days[d.date].manualCompletion = d.manual_completion;
-  }
-  for (const c of dbCompletions) {
-    if (!days[c.completed_date]) days[c.completed_date] = { tasks: [], completedTaskIds: [], manualCompletion: false };
-    if (!days[c.completed_date].completedTaskIds) days[c.completed_date].completedTaskIds = [];
-    days[c.completed_date].completedTaskIds!.push(c.task_id);
-  }
-  return { version: 2, settings: { theme: 'dark', weekStartsOn: 1 }, recurringTasks, days };
-}
 
 export function FriendsPage() {
   const { user, profile } = useAuth();
@@ -133,52 +97,21 @@ export function FriendsPage() {
 
 
       const combined: Friendship[] = [];
-      const currentYear = new Date().getFullYear();
 
       for (const r of rels) {
         const otherId = r.requester_id === user.id ? r.addressee_id : r.requester_id;
         const prof = resolvedProfiles?.find((p: any) => p.id === otherId);
 
         if (prof) {
-          let current_streak = 0;
-          if (r.status === 'accepted') {
-            try {
-              const { data: rpcData, error: rpcError } = await supabase.rpc('get_public_productivity', { target_user_id: prof.id, target_year: currentYear });
-              if (!rpcError && rpcData && !rpcData.error) {
-                current_streak = calculateStats(parseRPCData(rpcData), currentYear).currentStreak;
-              }
-            } catch (streakErr) {
-              console.warn('[FRIENDS] Failed to load streak for', prof.username, streakErr);
-            }
-          }
+          const current_streak = prof.current_streak || 0;
           combined.push({ ...r, profiles: { ...prof, current_streak } });
         } else {
-          // Profile genuinely not returned — either RLS blocks it or RPC not yet deployed.
-          // DO NOT silently create an "(unknown)" card — skip this row and warn loudly.
-          console.error(
-            '[FRIENDS] ❌ Profile NOT found for user', otherId,
-            '| This means either: (a) run FRIENDS_PROFILES_FIX.sql in Supabase, or (b) the ID has no profile row.',
-            '| Friendship row:', r
-          );
-          // Skip: don't push a broken card with username: "(unknown)"
+          console.warn('[FRIENDS] Profile row missing for user', otherId);
         }
       }
-
-
-
-
 
       setFriendships(combined);
-
-      // Fetch own streak (non-blocking)
-      try {
-        const { data: myRpc, error: myRpcError } = await supabase.rpc('get_public_productivity', { target_user_id: user.id, target_year: currentYear });
-        if (!myRpcError && myRpc && !myRpc.error) {
-          setMyStreak(calculateStats(parseRPCData(myRpc), currentYear).currentStreak);
-        }
-      } catch (myStreakErr) {
-        console.warn('[FRIENDS] Failed to load personal streak', myStreakErr);
-      }
+      setMyStreak(profile?.current_streak || 0);
 
     } catch (err: any) {
       console.error('[FRIENDS] Fatal error:', err);
@@ -321,18 +254,12 @@ export function FriendsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center gap-6 animate-fade-in px-4">
-        <div className="text-[10px] font-bold tracking-[0.3em] uppercase text-red-500">Error</div>
+        <div className="text-[10px] font-bold tracking-[0.3em] uppercase text-red-500">Notice</div>
         <div className="flex flex-col gap-2 w-full max-w-lg items-center">
-          <h2 className="text-2xl font-black text-red-400 tracking-tighter uppercase">Something went wrong</h2>
+          <h2 className="text-2xl font-black text-textMain tracking-tighter uppercase">Unable to load friends</h2>
           <p className="text-sm font-medium text-textMuted leading-relaxed">
-            Check the browser console for the full error. Details below:
+            We encountered an issue loading your social connections. Please try again in a moment.
           </p>
-          <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-left w-full text-xs font-mono break-words">
-            <div className="text-red-400 font-bold mb-1">Message: {error.message}</div>
-            {error.code && <div className="text-red-400/80">Code: {error.code}</div>}
-            {error.details && <div className="text-red-400/80">Details: {error.details}</div>}
-            {error.query && <div className="text-red-400/60 mt-1 opacity-70">Query: {error.query}</div>}
-          </div>
         </div>
         <button onClick={() => { setLoading(true); fetchFriendships(); }}
           className="px-6 py-3 mt-4 bg-white/5 hover:bg-white/10 text-xs font-bold tracking-[0.2em] uppercase text-white transition-colors rounded-full border border-white/10">

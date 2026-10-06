@@ -26,14 +26,30 @@ export function NoteEditorPage() {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const initializedRef = useRef<string | null>(null);
+  const latestTitleRef = useRef('');
+  const latestContentRef = useRef('');
+
+  useEffect(() => {
+    latestTitleRef.current = title;
+  }, [title]);
+
+  useEffect(() => {
+    latestContentRef.current = content;
+  }, [content]);
 
   useEffect(() => {
     if (loading) return;
     const found = notes.find(n => n.id === id);
     if (found) {
       setNote(found);
-      setTitle(found.title);
-      setContent(found.content || '');
+      if (initializedRef.current !== id) {
+        setTitle(found.title);
+        setContent(found.content || '');
+        latestTitleRef.current = found.title;
+        latestContentRef.current = found.content || '';
+        initializedRef.current = id ?? null;
+      }
     } else {
       navigate('/notes', { replace: true });
     }
@@ -54,21 +70,36 @@ export function NoteEditorPage() {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
     saveTimeoutRef.current = setTimeout(async () => {
-      if (!note) return;
+      if (!id) return;
       setSaveState('saving');
-      const success = await updateNote(note.id, { title: newTitle.trim() || 'Untitled', content: newContent }, false);
+      const success = await updateNote(id, { title: newTitle.trim() || 'Untitled', content: newContent }, false);
       setSaveState(success ? 'saved' : 'unsaved');
     }, 1000);
   };
+
+  // Flush on unmount to prevent data loss
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      if (id && (latestTitleRef.current || latestContentRef.current)) {
+        updateNote(id, { 
+          title: latestTitleRef.current.trim() || 'Untitled', 
+          content: latestContentRef.current 
+        }, false);
+      }
+    };
+  }, [id, updateNote]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        if (note) {
+        if (id) {
           setSaveState('saving');
-          updateNote(note.id, { title: title.trim() || 'Untitled', content }, false).then(success => {
+          updateNote(id, { title: latestTitleRef.current.trim() || 'Untitled', content: latestContentRef.current }, false).then(success => {
             setSaveState(success ? 'saved' : 'unsaved');
           });
         }
@@ -76,16 +107,18 @@ export function NoteEditorPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [note, title, content, updateNote]);
+  }, [id, updateNote]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setTitle(e.target.value);
-    triggerSave(e.target.value, content);
+    const newTitle = e.target.value;
+    setTitle(newTitle);
+    triggerSave(newTitle, latestContentRef.current);
   };
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
-    triggerSave(title, e.target.value);
+    const newContent = e.target.value;
+    setContent(newContent);
+    triggerSave(latestTitleRef.current, newContent);
   };
 
   const handleTogglePin = async () => {

@@ -91,61 +91,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const local = DataManager.loadData();
     if (!local || Object.keys(local.days).length === 0) return;
 
-    const taskMap = new Map<string, string>();
+    try {
+      const { data: result, error: rpcError } = await supabase.rpc('migrate_user_local_data', {
+        payload: local
+      });
 
-    for (const rt of local.recurringTasks) {
-      const { data: insertedTask, error } = await supabase.from('tasks').insert({
-        user_id: user.id,
-        name: rt.name,
-        category: rt.category,
-        duration: rt.duration,
-        recurring: rt.recurring,
-        created_at: rt.createdAt
-      }).select('id').single();
-
-      if (insertedTask && !error) {
-        taskMap.set(rt.id, insertedTask.id);
+      if (!rpcError && result?.success) {
+        DataManager.clearData();
+        return;
       }
+    } catch (err) {
+      console.warn('[MIGRATION] Atomic RPC migration failed, maintaining local backup:', err);
     }
-
-    for (const [dateStr, dayData] of Object.entries(local.days)) {
-      if (dayData.note || dayData.manualCompletion) {
-        await supabase.from('daily_data').insert({
-          user_id: user.id,
-          date: dateStr,
-          note: dayData.note || null,
-          manual_completion: dayData.manualCompletion || false
-        });
-      }
-
-      for (const t of dayData.tasks) {
-        const { data: insertedTask, error } = await supabase.from('tasks').insert({
-          user_id: user.id,
-          name: t.name,
-          category: t.category,
-          duration: t.duration,
-          recurring: 'none',
-          created_at: dateStr
-        }).select('id').single();
-
-        if (insertedTask && !error) {
-          taskMap.set(t.id, insertedTask.id);
-        }
-      }
-
-      for (const oldTaskId of dayData.completedTaskIds) {
-        const newTaskId = taskMap.get(oldTaskId);
-        if (newTaskId) {
-          await supabase.from('task_completions').insert({
-            user_id: user.id,
-            task_id: newTaskId,
-            completed_date: dateStr
-          });
-        }
-      }
-    }
-
-    DataManager.clearData();
   };
 
   return (

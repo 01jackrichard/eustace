@@ -25,10 +25,14 @@ export function AnalyticsPage() {
     async function fetchHourly() {
       if (!user) return;
       setIsLoadingHourly(true);
+      const startDate = `${currentYear}-01-01`;
+      const endDate = `${currentYear}-12-31`;
       const { data: completions } = await supabase
         .from('task_completions')
         .select('created_at')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .gte('completed_date', startDate)
+        .lte('completed_date', endDate);
 
       if (completions) {
         const hours: Record<number, number> = {};
@@ -44,7 +48,7 @@ export function AnalyticsPage() {
       setIsLoadingHourly(false);
     }
     fetchHourly();
-  }, [user]);
+  }, [user, currentYear]);
 
   const stats = useMemo(() => {
     if (!data) return null;

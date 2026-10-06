@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { LogOut, Loader2, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export function SettingsPage() {
   const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeTab = searchParams.get('section') || 'account';
@@ -90,11 +91,22 @@ export function SettingsPage() {
   };
 
   const handleDeleteAccount = async () => {
+    if (!user) return;
     setIsDeleting(true);
-    // Since Supabase requires a service role or edge function to delete a user account,
-    // we alert the user exactly as instructed when it cannot safely be implemented client-side.
-    toast.error('Account deletion requires backend configuration. Please contact support.');
-    setIsDeleting(false);
+    try {
+      const { error } = await supabase.rpc('delete_user_account');
+      if (error) {
+        toast.error('Failed to delete account: ' + error.message);
+      } else {
+        toast.success('Your account and data have been permanently deleted.');
+        await signOut();
+        navigate('/');
+      }
+    } catch (err: any) {
+      toast.error('Error deleting account: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const navGroups = [

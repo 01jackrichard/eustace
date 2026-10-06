@@ -40,15 +40,17 @@ export function usePublicProductivityData(targetUserId: string, year: number) {
           name: 'Private Task',
           description: t.description,
           recurring: t.recurring,
-          createdAt: t.created_at.split('T')[0],
+          createdAt: t.created_at?.split('T')[0] || '',
         };
 
         if (task.recurring && task.recurring !== 'none') {
           recurringTasks.push(task);
         } else {
           const date = task.createdAt;
-          if (!days[date]) days[date] = { tasks: [], completedTaskIds: [], manualCompletion: false };
-          days[date].tasks.push(task);
+          if (date) {
+            if (!days[date]) days[date] = { tasks: [], completedTaskIds: [], manualCompletion: false };
+            days[date].tasks.push(task);
+          }
         }
       }
 
@@ -58,10 +60,26 @@ export function usePublicProductivityData(targetUserId: string, year: number) {
       }
 
       for (const c of dbCompletions) {
-        const date = c.completed_date;
+        const date = c.date || c.completed_date;
+        if (!date) continue;
         if (!days[date]) days[date] = { tasks: [], completedTaskIds: [], manualCompletion: false };
         if (!days[date].completedTaskIds) days[date].completedTaskIds = [];
-        days[date].completedTaskIds.push(c.task_id);
+
+        if (typeof c.count === 'number') {
+          // Minimal aggregated schema from hardened RPC
+          for (let i = 0; i < c.count; i++) {
+            days[date].completedTaskIds.push(`agg-${date}-${i}`);
+            days[date].tasks.push({
+              id: `agg-${date}-${i}`,
+              name: 'Completed Task',
+              recurring: 'none',
+              createdAt: date
+            });
+          }
+        } else if (c.task_id) {
+          // Legacy schema
+          days[date].completedTaskIds.push(c.task_id);
+        }
       }
 
       setData({
@@ -73,7 +91,7 @@ export function usePublicProductivityData(targetUserId: string, year: number) {
     } catch (err) {
       console.error("RPC Error:", err);
       setData({ version: 2, settings: { theme: 'dark', weekStartsOn: 1 }, days: {}, recurringTasks: [] });
-      setError("rpc_missing");
+      setError("rpc_error");
     } finally {
       setLoading(false);
     }
