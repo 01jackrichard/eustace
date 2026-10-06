@@ -26,15 +26,15 @@ export function PublicProfilePage() {
       if (!username) return;
 
       const cleanUsername = username.trim().toLowerCase().replace(/^@+/, '');
-      console.log('[PROFILE] username requested:', username);
-      console.log('[PROFILE] authenticated user id:', user?.id);
-      console.log('[PROFILE] normalized username:', cleanUsername);
+
+
+
 
       const { data, error } = await supabase.rpc('get_profile_by_username', { target_username: cleanUsername });
 
       const profileData = data && data.length > 0 ? data[0] : null;
 
-      console.log('[PROFILE] profile data:', profileData);
+
       if (error) {
         console.error('[PROFILE] profile error:', error);
         console.error('[PROFILE] profile error code:', error.code);

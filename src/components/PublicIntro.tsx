@@ -22,7 +22,7 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
       const timer = setTimeout(() => {
         // Record old rects BEFORE changing phase
         if (containerRef.current) {
-          const spans = Array.from(containerRef.current.children) as HTMLSpanElement[];
+          const spans = Array.from(containerRef.current.querySelectorAll('.char')) as HTMLSpanElement[];
           oldRectsRef.current = spans.map(s => s.getBoundingClientRect());
         }
         setPhase('transition');
@@ -36,7 +36,7 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
       const container = containerRef.current;
       if (!container) return;
 
-      const newSpans = Array.from(container.children) as HTMLSpanElement[];
+      const newSpans = Array.from(container.querySelectorAll('.char')) as HTMLSpanElement[];
       const oldRects = oldRectsRef.current;
 
       // Fallback if measurement failed
@@ -144,13 +144,25 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
           }}
         >
           {phase === 'initial' ? (
-            INITIAL.split('').map((char, i) => (
-              <span key={i} className="inline-block transform-gpu">{char}</span>
-            ))
+            <span className="inline-block whitespace-nowrap">
+              {INITIAL.split('').map((char, i) => (
+                <span key={i} className="char inline-block transform-gpu">{char}</span>
+              ))}
+            </span>
           ) : (
-            TARGET.split('').map((char, i) => (
-              <span key={i} className="inline-block transform-gpu" style={char === ' ' ? { width: '0.4em' } : {}}>{char}</span>
-            ))
+            <>
+              <span className="inline-block whitespace-nowrap">
+                {TARGET.substring(0, 14).split('').map((char, i) => (
+                  <span key={i} className="char inline-block transform-gpu" style={char === ' ' ? { width: '0.4em' } : {}}>{char}</span>
+                ))}
+              </span>
+              <wbr />
+              <span className="inline-block whitespace-nowrap">
+                {TARGET.substring(14).split('').map((char, i) => (
+                  <span key={i + 14} className="char inline-block transform-gpu" style={char === ' ' ? { width: '0.4em' } : {}}>{char}</span>
+                ))}
+              </span>
+            </>
           )}
         </h1>
       </div>

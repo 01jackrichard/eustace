@@ -10,15 +10,15 @@ export function MobileHeader() {
       <Link to="/dashboard" className="text-xs font-bold tracking-widest text-textMain uppercase">EUSTACE</Link>
       
       <div className="flex items-center gap-5">
-        <Link to="/friends" className="text-textMuted hover:text-textMain transition-colors">
+        <Link to="/friends" aria-label="Friends" className="text-textMuted hover:text-textMain transition-colors">
           <Users size={18} strokeWidth={2} />
         </Link>
-        <Link to="/settings" className="text-textMuted hover:text-textMain transition-colors">
+        <Link to="/settings" aria-label="Settings" className="text-textMuted hover:text-textMain transition-colors">
           <Settings size={18} strokeWidth={2} />
         </Link>
-        <Link to="/profile" className="w-7 h-7 rounded-full bg-surface border border-border flex items-center justify-center overflow-hidden shrink-0">
+        <Link to="/profile" aria-label="Profile" className="w-7 h-7 rounded-full bg-surface border border-border flex items-center justify-center overflow-hidden shrink-0">
           {profile?.avatar_url ? (
-            <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+            <img src={profile.avatar_url} alt="Profile Avatar" className="w-full h-full object-cover" />
           ) : (
             <span className="text-[10px] font-bold text-textMain uppercase">
               {(profile?.display_name || profile?.username || 'U')[0]}

@@ -85,7 +85,7 @@ export function FriendsPage() {
     if (!user) return;
     setError(null);
     try {
-      console.log('[FRIENDS] Fetching for user:', user.id);
+
 
       // Layer 1: Load friendship rows. Column is addressee_id (not addressee_id)
       const { data: rels, error: relsError } = await supabase
@@ -95,12 +95,12 @@ export function FriendsPage() {
         .neq('status', 'cancelled')
         .neq('status', 'declined');
 
-      console.log('[FRIENDS] friendship rows:', rels, 'error:', relsError);
+
 
       if (relsError) throw { ...relsError, query: "friendships.select().or('requester_id,addressee_id')" };
 
       if (!rels || rels.length === 0) {
-        console.log('[FRIENDS] No friendship rows found.');
+
         setFriendships([]);
         setLoading(false);
         return;
@@ -108,7 +108,7 @@ export function FriendsPage() {
 
       // Layer 2: Determine the other user's ID for each row
       const otherUserIds = rels.map(r => r.requester_id === user.id ? r.addressee_id : r.requester_id);
-      console.log('[FRIENDS] requester_ids / addressee_ids to fetch profiles for:', otherUserIds);
+
 
       // Layer 3: Use get_friend_profiles RPC (SECURITY DEFINER) instead of direct
       // profiles table access. The direct query fails when the other user's profile
@@ -118,7 +118,7 @@ export function FriendsPage() {
         user_ids: otherUserIds
       });
 
-      console.log('[FRIENDS] profile fetch result:', profiles, 'error:', profileError);
+
 
       // If the RPC doesn't exist yet, fall back to direct query (less reliable)
       let resolvedProfiles = profiles;
@@ -138,7 +138,7 @@ export function FriendsPage() {
       for (const r of rels) {
         const otherId = r.requester_id === user.id ? r.addressee_id : r.requester_id;
         const prof = resolvedProfiles?.find((p: any) => p.id === otherId);
-        console.log('[FRIENDS] incoming friendship requester_id:', r.requester_id, '| looking for otherId:', otherId, '| found profile:', prof);
+
         if (prof) {
           let current_streak = 0;
           if (r.status === 'accepted') {
@@ -164,9 +164,9 @@ export function FriendsPage() {
         }
       }
 
-      console.log('[FRIENDS] incoming requests:', combined.filter(f => f.status === 'pending' && f.addressee_id === user.id));
-      console.log('[FRIENDS] outgoing requests:', combined.filter(f => f.status === 'pending' && f.requester_id === user.id));
-      console.log('[FRIENDS] accepted friends:', combined.filter(f => f.status === 'accepted'));
+
+
+
 
       setFriendships(combined);
 
@@ -223,12 +223,12 @@ export function FriendsPage() {
       // Normalize: lowercase, trim, remove leading @
       const cleanQuery = debouncedSearch.trim().toLowerCase().replace(/^@+/, '');
 
-      console.log('[FRIENDS] Searching for username:', cleanQuery);
+
 
       try {
         const { data, error } = await supabase.rpc('search_users_by_username', { search_query: `%${cleanQuery}%` });
 
-        console.log('[FRIENDS] Search result:', data, 'error:', error);
+
 
         if (error) {
           // Fallback to direct query if RPC doesn't exist yet
@@ -259,13 +259,13 @@ export function FriendsPage() {
 
   const handleAddFriend = async (targetUserId: string) => {
     if (!user) return;
-    console.log('[FRIENDS] Sending request: requester=', user.id, 'receiver=', targetUserId);
+
     const { data, error } = await supabase
       .from('friendships')
       .insert({ requester_id: user.id, addressee_id: targetUserId, status: 'pending' })
       .select()
       .single();
-    console.log('[FRIENDS] Send request result:', data, 'error:', error);
+
     if (error) {
       console.error('[FRIENDS] Add Friend Error:', error);
     } else {
@@ -274,14 +274,14 @@ export function FriendsPage() {
   };
 
   const handleAccept = async (friendshipId: string) => {
-    console.log('[FRIENDS] Accepting friendship:', friendshipId);
+
     const { data, error } = await supabase
       .from('friendships')
       .update({ status: 'accepted', updated_at: new Date().toISOString() })
       .eq('id', friendshipId)
       .select()
       .single();
-    console.log('[FRIENDS] Accept result:', data, 'error:', error);
+
     if (error) console.error('[FRIENDS] Accept Error:', error);
     else fetchFriendships();
   };

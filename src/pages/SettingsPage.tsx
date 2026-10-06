@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useSearchParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
@@ -92,7 +93,7 @@ export function SettingsPage() {
     setIsDeleting(true);
     // Since Supabase requires a service role or edge function to delete a user account,
     // we alert the user exactly as instructed when it cannot safely be implemented client-side.
-    alert("Account deletion requires backend configuration (e.g. Edge Function with Service Role). Please run the provided SQL function or contact support to complete this action.");
+    toast.error('Account deletion requires backend configuration. Please contact support.');
     setIsDeleting(false);
   };
 
