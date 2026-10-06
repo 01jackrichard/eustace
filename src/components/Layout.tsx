@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+import { MobileHeader } from './MobileHeader';
+import { MobileBottomNav } from './MobileBottomNav';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Loader2 } from 'lucide-react';
@@ -22,20 +24,22 @@ export function ProtectedLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  // Profile setup intercept for OAuth users
   if (!profile) {
     return <ProfileSetupFlow onComplete={refreshProfile} />;
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] bg-background flex flex-col">
       <Sidebar />
-      {/* Mobile nav could go here */}
-      <main className="md:pl-64 flex flex-col min-h-screen">
+      <MobileHeader />
+      
+      <main className="flex-1 flex flex-col md:pl-64 pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(60px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 min-h-[100dvh]">
         <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
           <Outlet />
         </div>
       </main>
+
+      <MobileBottomNav />
     </div>
   );
 }

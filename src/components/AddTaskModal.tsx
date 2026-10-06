@@ -84,12 +84,12 @@ export function AddTaskModal({ date, initialTask, onClose, onAdd, onEdit }: AddT
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-background/80 md:p-4 backdrop-blur-sm animate-in fade-in duration-200">
       <div
         ref={modalRef}
-        className="w-full max-w-lg bg-surface border border-border/40 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        className="w-full max-w-lg bg-surface border-t border-x md:border border-border/40 rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] max-h-[90dvh] flex flex-col"
       >
-        <div className="px-6 py-5 border-b border-border/20 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-border/20 flex items-center justify-between shrink-0">
           <h2 className="text-sm font-bold tracking-widest text-textMuted uppercase">
             {initialTask ? 'Edit Task' : 'New Task'}
           </h2>
@@ -101,7 +101,7 @@ export function AddTaskModal({ date, initialTask, onClose, onAdd, onEdit }: AddT
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto">
           {/* Main Task Input */}
           <div>
             <input

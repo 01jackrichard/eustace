@@ -133,7 +133,7 @@ export function SettingsPage() {
       <div className="flex flex-col md:flex-row gap-12 md:gap-24 items-start">
 
         {/* Left Nav */}
-        <nav className="w-full md:w-56 shrink-0 flex flex-row md:flex-col gap-4 md:gap-8 overflow-x-auto md:overflow-visible pb-4 md:pb-0 custom-scrollbar">
+        <nav className="w-full md:w-56 shrink-0 flex flex-row md:flex-col gap-4 md:gap-8 overflow-x-auto md:overflow-visible pb-4 md:pb-0 no-scrollbar">
           {navGroups.map((group, i) => (
             <div key={i} className="flex flex-col gap-3 shrink-0">
               <span className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase px-3 hidden md:block">{group.title}</span>

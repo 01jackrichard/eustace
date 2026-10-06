@@ -137,10 +137,10 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-2xl bg-surface border border-border/40 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-background/80 md:p-4 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-2xl bg-surface border-t border-x md:border border-border/40 rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden animate-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 pb-[env(safe-area-inset-bottom)]">
 
-        <div className="flex items-center justify-between p-6 border-b border-border/30">
+        <div className="flex items-center justify-between p-6 border-b border-border/30 shrink-0">
           <h2 className="text-sm font-bold tracking-widest text-textMain uppercase">Edit Profile</h2>
           <button onClick={onClose} className="p-2 text-textMuted hover:text-textMain transition-colors"><X size={18} /></button>
         </div>

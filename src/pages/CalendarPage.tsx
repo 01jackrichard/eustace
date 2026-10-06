@@ -26,9 +26,9 @@ export function CalendarPage() {
           <p className="text-textMuted text-sm mt-1">Your year at a glance.</p>
         </div>
         <div className="flex items-center gap-4 bg-surface px-4 py-2 rounded-xl border border-border">
-          <button onClick={() => setCurrentYear(y => y - 1)} className="text-textMuted hover:text-textMain px-2">&larr;</button>
+          <button onClick={() => setCurrentYear(y => y - 1)} className="text-textMuted hover:text-textMain px-3 py-1 -ml-2">&larr;</button>
           <span className="font-semibold text-textMain">{currentYear}</span>
-          <button onClick={() => setCurrentYear(y => y + 1)} className="text-textMuted hover:text-textMain px-2">&rarr;</button>
+          <button onClick={() => setCurrentYear(y => y + 1)} className="text-textMuted hover:text-textMain px-3 py-1 -mr-2">&rarr;</button>
         </div>
       </div>
       <div className="bg-surface border border-border/60 rounded-2xl p-6 md:p-8 hover:border-textMuted/30 transition-colors">

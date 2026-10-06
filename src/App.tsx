@@ -14,6 +14,8 @@ import { ProfilePage } from './pages/ProfilePage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { Toaster } from 'react-hot-toast';
+import { PWAReloadPrompt } from './components/PWAReloadPrompt';
+import { InstallPrompt } from './components/InstallPrompt';
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
       <Toaster position="bottom-center" toastOptions={{
         style: { background: '#1c1c1c', color: '#fff', border: '1px solid #333' }
       }} />
+      <InstallPrompt />
+      <PWAReloadPrompt />
       <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/auth/callback" element={<Landing />} />

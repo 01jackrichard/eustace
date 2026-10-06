@@ -22,11 +22,11 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-background/80 md:p-4 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-surface border border-border/60 rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden"
+        className="w-full max-w-sm bg-surface border-t border-x md:border border-border/60 rounded-t-2xl md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 overflow-hidden pb-[env(safe-area-inset-bottom)] flex flex-col max-h-[90dvh]"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
