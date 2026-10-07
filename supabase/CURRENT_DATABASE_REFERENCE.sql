@@ -651,3 +651,36 @@ DO $$ BEGIN
     );
   END IF;
 END $$;
+
+-- ==========================================
+-- 8. BACKFILL EXISTING USERS
+-- ==========================================
+DO $$
+DECLARE
+  u record;
+  v_uname text;
+BEGIN
+  FOR u IN SELECT id, raw_user_meta_data FROM auth.users LOOP
+    v_uname := LOWER(TRIM(COALESCE(u.raw_user_meta_data->>'username', '')));
+    IF v_uname = '' THEN
+      v_uname := 'user_' || SUBSTRING(REPLACE(u.id::text, '-', ''), 1, 10);
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.profiles WHERE username = v_uname AND id != u.id) THEN
+      v_uname := v_uname || '_' || SUBSTRING(REPLACE(u.id::text, '-', ''), 1, 6);
+    END IF;
+
+    INSERT INTO public.profiles (id, username, display_name, full_name, visibility, activity_visibility)
+    VALUES (
+      u.id, 
+      v_uname, 
+      COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', 'User'),
+      COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', 'User'),
+      'public',
+      'public'
+    ) ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.user_preferences (user_id) VALUES (u.id) ON CONFLICT (user_id) DO NOTHING;
+    INSERT INTO public.user_stats (user_id, current_streak) VALUES (u.id, 0) ON CONFLICT (user_id) DO NOTHING;
+  END LOOP;
+END $$;
+
