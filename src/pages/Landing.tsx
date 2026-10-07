@@ -460,6 +460,14 @@ export function Landing() {
                 <li><Link to="/signup" className="text-textMain hover:text-textMuted transition-colors">Get Started</Link></li>
               </ul>
             </div>
+
+            <div>
+              <div className="text-[10px] font-bold tracking-widest uppercase text-textMuted mb-6">Legal</div>
+              <ul className="flex flex-col gap-4 text-xs font-medium">
+                <li><Link to="/privacy" className="text-textMain hover:text-textMuted transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="text-textMain hover:text-textMuted transition-colors">Terms of Service</Link></li>
+              </ul>
+            </div>
           </div>
           
           <div className="border-t border-border/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">

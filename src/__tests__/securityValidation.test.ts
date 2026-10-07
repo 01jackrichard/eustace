@@ -161,4 +161,54 @@ describe('Security Validation & State Integrity', () => {
       expect(isProfileVisible('private', false, true)).toBe(false);
     });
   });
+
+  describe('Username Normalization & Validation Parity', () => {
+    const validateUsername = (u: string) => /^[a-z0-9_]{3,20}$/.test(u);
+    const normalizeUsername = (u: string) => u.toLowerCase().trim();
+
+    it('accepts valid lowercase alphanumeric handles with underscores', () => {
+      expect(validateUsername('alex_dev')).toBe(true);
+      expect(validateUsername('user123')).toBe(true);
+      expect(validateUsername('dev')).toBe(true);
+      expect(validateUsername('a_b_c_1_2_3')).toBe(true);
+    });
+
+    it('rejects handles with length < 3 or > 20', () => {
+      expect(validateUsername('ab')).toBe(false);
+      expect(validateUsername('a'.repeat(21))).toBe(false);
+    });
+
+    it('rejects special characters and spaces', () => {
+      expect(validateUsername('alex-dev')).toBe(false);
+      expect(validateUsername('alex dev')).toBe(false);
+      expect(validateUsername('alex@dev')).toBe(false);
+      expect(validateUsername('alex!123')).toBe(false);
+    });
+
+    it('normalizes uppercase handles to lowercase before validation', () => {
+      const normalized = normalizeUsername('  Alex_Dev  ');
+      expect(normalized).toBe('alex_dev');
+      expect(validateUsername(normalized)).toBe(true);
+    });
+  });
+
+  describe('RRule Parsing Memoization Cache', () => {
+    it('returns the same cached RRule instance on repeated invocations', async () => {
+      const { getParsedRRule } = await import('../lib/dataManager');
+      const ruleString = 'FREQ=WEEKLY;BYDAY=MO,WE,FR';
+      const rule1 = getParsedRRule(ruleString);
+      const rule2 = getParsedRRule(ruleString);
+
+      expect(rule1).not.toBeNull();
+      expect(rule2).not.toBeNull();
+      expect(rule1).toBe(rule2); // Same object reference from cache
+    });
+
+    it('returns null safely without throwing on invalid recurrence strings', async () => {
+      const { getParsedRRule } = await import('../lib/dataManager');
+      expect(getParsedRRule('MALFORMED_RRULE_STRING')).toBeNull();
+      expect(getParsedRRule('')).toBeNull();
+    });
+  });
 });
+

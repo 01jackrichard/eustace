@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
-import { LogOut, Loader2, Check } from 'lucide-react';
+import { LogOut, Loader2, Check, Download, Shield, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export function SettingsPage() {
@@ -33,6 +33,52 @@ export function SettingsPage() {
   // Danger Zone State
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportData = async () => {
+    if (!user) return;
+    setIsExporting(true);
+    try {
+      const [profileRes, tasksRes, completionsRes, dailyRes, foldersRes, notesRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase.from('tasks').select('*').eq('user_id', user.id),
+        supabase.from('task_completions').select('*').eq('user_id', user.id),
+        supabase.from('daily_data').select('*').eq('user_id', user.id),
+        supabase.from('folders').select('*').eq('user_id', user.id),
+        supabase.from('notes').select('*').eq('user_id', user.id)
+      ]);
+
+      const exportPayload = {
+        exportedAt: new Date().toISOString(),
+        version: '1.0',
+        account: {
+          id: user.id,
+          email: user.email,
+          profile: profileRes.data || null
+        },
+        tasks: tasksRes.data || [],
+        completions: completionsRes.data || [],
+        dailyLogs: dailyRes.data || [],
+        folders: foldersRes.data || [],
+        notes: notesRes.data || []
+      };
+
+      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `eustace-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Your data export is ready.');
+    } catch (err: any) {
+      toast.error('Failed to export data: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   useEffect(() => {
     async function loadPrefs() {
@@ -247,6 +293,40 @@ export function SettingsPage() {
                   <span className="text-xs font-medium text-textMuted">The email address tied to your account.</span>
                 </div>
                 <div className="text-sm text-textMain font-bold bg-surface px-4 py-2 rounded border border-border/20 md:min-w-[200px] opacity-70 cursor-not-allowed">{user?.email}</div>
+              </div>
+
+              <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted mt-8 mb-4 border-b border-border/20 pb-2">Data Portability & Compliance</h3>
+
+              <div className="flex flex-col md:flex-row md:items-center justify-between py-6 border-b border-border/10 gap-4">
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-textMain">Export your data</span>
+                  <span className="text-xs font-medium text-textMuted">Download a complete machine-readable JSON archive of your profile, tasks, notes, and habits (GDPR Article 20).</span>
+                </div>
+                <button
+                  onClick={handleExportData}
+                  disabled={isExporting}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-surface border border-border/30 rounded text-xs font-bold text-textMain hover:border-accent transition-colors disabled:opacity-50"
+                >
+                  <Download size={14} />
+                  {isExporting ? 'Exporting...' : 'Export JSON'}
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between py-6 gap-4 text-xs text-textMuted">
+                <div className="flex items-center gap-2">
+                  <Shield size={14} className="text-accent" />
+                  <span>Your data is protected under GDPR and CCPA regulations.</span>
+                </div>
+                <div className="flex gap-4">
+                  <Link to="/privacy" className="hover:text-textMain transition-colors flex items-center gap-1">
+                    <FileText size={12} />
+                    Privacy Policy
+                  </Link>
+                  <Link to="/terms" className="hover:text-textMain transition-colors flex items-center gap-1">
+                    <FileText size={12} />
+                    Terms of Service
+                  </Link>
+                </div>
               </div>
             </div>
           )}

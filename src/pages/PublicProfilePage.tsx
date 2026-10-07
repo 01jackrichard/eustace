@@ -60,23 +60,20 @@ export function PublicProfilePage() {
 
   const fetchFriendship = async (targetId: string) => {
     if (!user) return;
-    // Column is addressee_id (not addressee_id) — matches actual DB schema
     const { data } = await supabase
       .from('friendships')
       .select('*')
-      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
-      .neq('status', 'cancelled')
-      .neq('status', 'declined');
+      .or(`and(requester_id.eq.${user.id},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${user.id})`)
+      .in('status', ['pending', 'accepted'])
+      .maybeSingle();
 
-    if (data) {
-      const rel = data.find(f => f.requester_id === targetId || f.addressee_id === targetId);
-      setFriendship(rel || null);
-    }
+    setFriendship(data || null);
   };
 
   useEffect(() => {
     if (!user || !profile) return;
-    const channel = supabase.channel('public_profile_changes')
+    const channelName = `public_profile_${user.id}_${profile.id}`;
+    const channel = supabase.channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `requester_id=eq.${user.id}` }, () => fetchFriendship(profile.id))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `addressee_id=eq.${user.id}` }, () => fetchFriendship(profile.id))
       .subscribe();
