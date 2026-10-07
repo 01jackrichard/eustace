@@ -19,6 +19,14 @@ export function NotesPage() {
   const [editingFolder, setEditingFolder] = useState<NoteFolder | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<NoteFolder | null>(null);
 
+  const handleNewNoteRef = useRef<() => void>(() => {});
+  handleNewNoteRef.current = () => {
+    const folderId = selectedFolderId !== 'all' && selectedFolderId !== 'pinned' ? selectedFolderId : null;
+    createNote(folderId).then(note => {
+      if (note) navigate(`/notes/${note.id}`);
+    });
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -27,12 +35,12 @@ export function NotesPage() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
-        handleNewNote();
+        handleNewNoteRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
+  }, []);
 
   const filteredNotes = notes.filter(n => {
     // Folders / Pinned

@@ -69,12 +69,32 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
     checkUsername();
   }, [debouncedUsername, profile?.username, user?.id]);
 
+  const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+  const validateImageFile = (file: File): string | null => {
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      return 'Invalid file type. Please upload a JPEG, PNG, WebP, or GIF image.';
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return 'File size exceeds 5MB limit. Please choose a smaller image.';
+    }
+    return null;
+  };
+
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !user) return;
     const file = e.target.files[0];
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
     setCoverLoading(true);
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${user.id}-cover-${Math.random()}.${fileExt}`;
+    setErrorMessage(null);
+    const rawExt = file.name.split('.').pop()?.toLowerCase();
+    const safeExt = ['jpeg', 'png', 'webp', 'gif'].includes(rawExt || '') ? rawExt : 'jpg';
+    const filePath = `${user.id}-cover-${Math.random()}.${safeExt}`;
     const { error: uploadError } = await supabase.storage.from('profile-covers').upload(filePath, file);
     if (uploadError) {
       setErrorMessage(uploadError.message);
@@ -89,9 +109,16 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !user) return;
     const file = e.target.files[0];
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
     setAvatarLoading(true);
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${user.id}-${Math.random()}.${fileExt}`;
+    setErrorMessage(null);
+    const rawExt = file.name.split('.').pop()?.toLowerCase();
+    const safeExt = ['jpeg', 'png', 'webp', 'gif'].includes(rawExt || '') ? rawExt : 'jpg';
+    const filePath = `${user.id}-${Math.random()}.${safeExt}`;
     const { error: uploadError } = await supabase.storage.from('profile-images').upload(filePath, file);
     if (uploadError) {
       setErrorMessage(uploadError.message);

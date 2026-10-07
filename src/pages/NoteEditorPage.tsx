@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useNotesData, type Note } from '../hooks/useNotesData';
+import { supabase } from '../lib/supabase';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { ArrowLeft, Pin, MoreVertical, Folder, Trash2, Tag, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -10,9 +11,10 @@ import { ConfirmModal, MoveFolderModal, EditTagsModal } from '../components/Note
 export function NoteEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { notes, folders, updateNote, deleteNote, loading } = useNotesData();
+  const { notes, folders, updateNote, deleteNote } = useNotesData();
 
   const [note, setNote] = useState<Note | null>(null);
+  const [noteLoading, setNoteLoading] = useState(true);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
@@ -26,7 +28,6 @@ export function NoteEditorPage() {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const initializedRef = useRef<string | null>(null);
   const latestTitleRef = useRef('');
   const latestContentRef = useRef('');
 
@@ -39,21 +40,34 @@ export function NoteEditorPage() {
   }, [content]);
 
   useEffect(() => {
-    if (loading) return;
-    const found = notes.find(n => n.id === id);
-    if (found) {
-      setNote(found);
-      if (initializedRef.current !== id) {
-        setTitle(found.title);
-        setContent(found.content || '');
-        latestTitleRef.current = found.title;
-        latestContentRef.current = found.content || '';
-        initializedRef.current = id ?? null;
+    if (!id) return;
+    let active = true;
+
+    async function fetchSingleNote() {
+      setNoteLoading(true);
+      const { data: singleNote, error } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (!active) return;
+      if (error || !singleNote) {
+        navigate('/notes', { replace: true });
+        return;
       }
-    } else {
-      navigate('/notes', { replace: true });
+
+      setNote(singleNote as Note);
+      setTitle(singleNote.title);
+      setContent(singleNote.content || '');
+      latestTitleRef.current = singleNote.title;
+      latestContentRef.current = singleNote.content || '';
+      setNoteLoading(false);
     }
-  }, [id, loading, notes, navigate]);
+
+    fetchSingleNote();
+    return () => { active = false; };
+  }, [id, navigate]);
 
   // Handle auto-resize of textarea
   useEffect(() => {
@@ -156,7 +170,7 @@ export function NoteEditorPage() {
     triggerSave(title, newContent);
   };
 
-  if (loading || !note) {
+  if (noteLoading || !note) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-textMuted">
         <Loader2 className="w-8 h-8 animate-spin text-accent" />

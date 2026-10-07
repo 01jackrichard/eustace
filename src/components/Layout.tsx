@@ -51,11 +51,11 @@ function ProfileSetupFlow({ onComplete }: { onComplete: () => Promise<void> }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const debouncedUsername = useDebounce(username, 500);
+  const debouncedUsername = useDebounce(username.toLowerCase().trim(), 500);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
 
   const validateUsername = (u: string) => {
-    return /^[a-zA-Z0-9_]{3,20}$/.test(u);
+    return /^[a-z0-9_]{3,20}$/.test(u);
   };
 
   useEffect(() => {
@@ -82,24 +82,27 @@ function ProfileSetupFlow({ onComplete }: { onComplete: () => Promise<void> }) {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    if (usernameStatus !== 'available' || !name.trim()) return;
+    const cleanUsername = username.toLowerCase().trim();
+    if (usernameStatus !== 'available' || !name.trim() || !validateUsername(cleanUsername)) return;
 
     setSaving(true);
     setError(null);
 
-    const { error: insertError } = await supabase.from('profiles').insert({
+    const { error: insertError } = await supabase.from('profiles').upsert({
       id: user.id,
-      username: username.trim(),
+      username: cleanUsername,
       full_name: name.trim(),
       display_name: name.trim(),
       avatar_url: user?.user_metadata?.avatar_url || null,
       visibility: 'public'
-    });
+    }, { onConflict: 'id' });
 
     if (insertError) {
       setError(insertError.message);
       setSaving(false);
     } else {
+      await supabase.from('user_preferences').upsert({ user_id: user.id }, { onConflict: 'user_id' });
+      await supabase.from('user_stats').upsert({ user_id: user.id, current_streak: 0 }, { onConflict: 'user_id' });
       await onComplete();
     }
   };

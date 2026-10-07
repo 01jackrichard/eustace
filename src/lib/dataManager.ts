@@ -121,6 +121,26 @@ export const DataManager = {
   }
 };
 
+// Memoization cache for parsed RRule instances
+const rruleCache = new Map<string, RRule>();
+
+export const getParsedRRule = (rruleStr: string): RRule | null => {
+  if (!rruleStr) return null;
+  const cached = rruleCache.get(rruleStr);
+  if (cached) return cached;
+  try {
+    const rule = RRule.fromString(rruleStr);
+    if (rruleCache.size > 200) {
+      const firstKey = rruleCache.keys().next().value;
+      if (firstKey) rruleCache.delete(firstKey);
+    }
+    rruleCache.set(rruleStr, rule);
+    return rule;
+  } catch {
+    return null;
+  }
+};
+
 export const getTasksForDate = (data: AppData, dateStr: string): Task[] => {
   const dayData = data.days[dateStr];
   const specificTasks = dayData?.tasks || [];
@@ -148,7 +168,9 @@ export const getTasksForDate = (data: AppData, dateStr: string): Task[] => {
 
     if (task.recurring === 'custom' && meta.rrule) {
       try {
-        const rule = RRule.fromString(meta.rrule);
+        const rule = getParsedRRule(meta.rrule);
+        if (!rule) return false;
+
         // RRule uses UTC dates. We need to convert our local targetDate to UTC for matching
         const utcTarget = new Date(Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()));
 

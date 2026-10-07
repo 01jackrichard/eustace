@@ -133,7 +133,7 @@ export function FriendsPage() {
 
     // Realtime: decorative enhancement, never blocks initial load
     const channel = supabase
-      .channel('friendships_changes')
+      .channel(`friendships_changes_${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `requester_id=eq.${user.id}` }, () => fetchFriendships())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `addressee_id=eq.${user.id}` }, () => fetchFriendships())
       .subscribe((_status, err) => {

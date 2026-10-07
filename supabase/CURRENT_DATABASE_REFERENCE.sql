@@ -5,6 +5,8 @@
 
 -- 1. Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- ==========================================
 -- 2. TABLES
@@ -50,10 +52,10 @@ CREATE TABLE public.friendships (
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
   CONSTRAINT friendships_no_self_friend CHECK (requester_id != addressee_id)
 );
-CREATE UNIQUE INDEX friendships_unique_pair_idx ON public.friendships (
+CREATE UNIQUE INDEX friendships_unique_active_pair_idx ON public.friendships (
   least(requester_id, addressee_id),
   greatest(requester_id, addressee_id)
-);
+) WHERE status IN ('pending', 'accepted');
 
 -- PRODUCTIVITY SYSTEM
 CREATE TABLE public.tasks (
@@ -137,26 +139,39 @@ BEGIN
   SELECT p.id, p.username, p.display_name, p.full_name, p.bio, p.avatar_url, p.cover_image_url, p.visibility, p.activity_visibility
   FROM public.profiles p
   WHERE p.username ILIKE target_username
+    AND (
+      p.visibility = 'public' 
+      OR p.id = auth.uid() 
+      OR (p.visibility = 'friends' AND public.is_connected_to_user(p.id))
+    )
   LIMIT 1;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- Search Users (respects visibility)
+-- Search Users (respects visibility, enforces min length and pagination limit)
 CREATE OR REPLACE FUNCTION public.search_users_by_username(search_query text)
 RETURNS TABLE (
   id uuid, username text, display_name text,
   full_name text, avatar_url text, visibility text
 ) AS $$
+DECLARE
+  v_cleaned text;
 BEGIN
+  v_cleaned := trim(search_query);
+  IF length(v_cleaned) < 2 THEN
+    RETURN;
+  END IF;
+
   RETURN QUERY
   SELECT p.id, p.username, p.display_name, p.full_name, p.avatar_url, p.visibility
   FROM public.profiles p
-  WHERE p.username ILIKE search_query
-    AND (p.visibility = 'public' OR p.id = auth.uid());
+  WHERE p.username ILIKE v_cleaned
+    AND (p.visibility = 'public' OR p.id = auth.uid())
+  LIMIT 25;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- Get Friend Profiles (checks friendship before revealing)
+-- Get Friend Profiles (checks friendship before revealing; masks streak/bio if only pending)
 CREATE OR REPLACE FUNCTION public.get_friend_profiles(user_ids uuid[])
 RETURNS TABLE (
   id uuid, username text, display_name text,
@@ -165,8 +180,25 @@ RETURNS TABLE (
 BEGIN
   RETURN QUERY
   SELECT 
-    p.id, p.username, p.display_name, p.full_name, p.avatar_url, p.bio,
-    COALESCE(s.current_streak, 0) as current_streak
+    p.id, p.username, p.display_name, p.full_name, p.avatar_url,
+    CASE 
+      WHEN p.id = auth.uid() OR EXISTS (
+        SELECT 1 FROM public.friendships f 
+        WHERE f.status = 'accepted' 
+          AND ((f.requester_id = auth.uid() AND f.addressee_id = p.id) 
+            OR (f.addressee_id = auth.uid() AND f.requester_id = p.id))
+      ) THEN p.bio
+      ELSE ''
+    END as bio,
+    CASE 
+      WHEN p.id = auth.uid() OR EXISTS (
+        SELECT 1 FROM public.friendships f 
+        WHERE f.status = 'accepted' 
+          AND ((f.requester_id = auth.uid() AND f.addressee_id = p.id) 
+            OR (f.addressee_id = auth.uid() AND f.requester_id = p.id))
+      ) THEN COALESCE(s.current_streak, 0)
+      ELSE 0
+    END as current_streak
   FROM public.profiles p
   LEFT JOIN public.user_stats s ON s.user_id = p.id
   WHERE p.id = ANY(user_ids)
@@ -182,7 +214,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- Public Productivity Fetcher (sanitized, server-side privacy check)
+-- Public Productivity Fetcher (sanitized, server-side privacy check, sargable date bounds)
 CREATE OR REPLACE FUNCTION public.get_public_productivity(target_user_id UUID, target_year INT)
 RETURNS jsonb AS $$
 DECLARE
@@ -190,8 +222,12 @@ DECLARE
   v_activity_visibility text;
   v_is_friend boolean;
   v_caller_id uuid;
+  v_start_date date;
+  v_end_date date;
 BEGIN
   v_caller_id := auth.uid();
+  v_start_date := make_date(target_year, 1, 1);
+  v_end_date := make_date(target_year, 12, 31);
 
   SELECT visibility, activity_visibility 
   INTO v_visibility, v_activity_visibility 
@@ -232,7 +268,8 @@ BEGIN
         SELECT completed_date, count(*) as cnt
         FROM public.task_completions
         WHERE user_id = target_user_id 
-          AND extract(year from completed_date) = target_year
+          AND completed_date >= v_start_date
+          AND completed_date <= v_end_date
         GROUP BY completed_date
       ) agg
     ),
@@ -243,13 +280,14 @@ BEGIN
       )), '[]'::jsonb)
       FROM public.daily_data 
       WHERE user_id = target_user_id 
-        AND extract(year from date) = target_year
+        AND date >= v_start_date
+        AND date <= v_end_date
     )
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- Local Storage Cloud Migration RPC
+-- Local Storage Cloud Migration RPC (with deduplication and sanity bounds)
 CREATE OR REPLACE FUNCTION public.migrate_user_local_data(payload jsonb)
 RETURNS jsonb AS $$
 DECLARE
@@ -261,6 +299,8 @@ DECLARE
   v_task_map jsonb := '{}'::jsonb;
   v_cid text;
   v_mapped_task_id uuid;
+  v_task_count int := 0;
+  v_day_count int := 0;
 BEGIN
   v_user_id := auth.uid();
   IF v_user_id IS NULL THEN
@@ -270,9 +310,21 @@ BEGIN
   IF payload->'recurringTasks' IS NOT NULL THEN
     FOR v_task_rec IN SELECT * FROM jsonb_to_recordset(payload->'recurringTasks') AS x(id text, name text, category text, duration text, recurring text, "createdAt" text, description text)
     LOOP
-      INSERT INTO public.tasks (user_id, name, category, duration, recurring, created_at, description)
-      VALUES (v_user_id, v_task_rec.name, v_task_rec.category, v_task_rec.duration, v_task_rec.recurring, COALESCE(v_task_rec."createdAt"::date, CURRENT_DATE), v_task_rec.description)
-      RETURNING id INTO v_new_id;
+      v_task_count := v_task_count + 1;
+      IF v_task_count > 500 THEN
+        EXIT;
+      END IF;
+
+      -- Check if matching recurring task already exists
+      SELECT id INTO v_new_id FROM public.tasks 
+      WHERE user_id = v_user_id AND name = v_task_rec.name AND recurring = v_task_rec.recurring
+      LIMIT 1;
+
+      IF v_new_id IS NULL THEN
+        INSERT INTO public.tasks (user_id, name, category, duration, recurring, created_at, description)
+        VALUES (v_user_id, v_task_rec.name, v_task_rec.category, v_task_rec.duration, v_task_rec.recurring, COALESCE(NULLIF(v_task_rec."createdAt", '')::date, CURRENT_DATE), v_task_rec.description)
+        RETURNING id INTO v_new_id;
+      END IF;
 
       v_task_map := jsonb_set(v_task_map, ARRAY[v_task_rec.id], to_jsonb(v_new_id::text));
     END LOOP;
@@ -281,6 +333,11 @@ BEGIN
   IF payload->'days' IS NOT NULL THEN
     FOR v_day_key, v_day_val IN SELECT * FROM jsonb_each(payload->'days')
     LOOP
+      v_day_count := v_day_count + 1;
+      IF v_day_count > 1000 THEN
+        EXIT;
+      END IF;
+
       IF (v_day_val->>'note') IS NOT NULL OR (v_day_val->>'manualCompletion')::boolean = true THEN
         INSERT INTO public.daily_data (user_id, date, note, manual_completion)
         VALUES (v_user_id, v_day_key::date, v_day_val->>'note', COALESCE((v_day_val->>'manualCompletion')::boolean, false))
@@ -317,7 +374,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- Account Deletion RPC
+-- Account Deletion RPC (cascades to storage and auth.users)
 CREATE OR REPLACE FUNCTION public.delete_user_account()
 RETURNS jsonb AS $$
 DECLARE
@@ -328,9 +385,17 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated';
   END IF;
 
-  DELETE FROM public.profiles WHERE id = v_user_id;
+  -- 1. Remove user storage objects
+  DELETE FROM storage.objects 
+  WHERE bucket_id IN ('profile-images', 'profile-covers')
+    AND (owner = v_user_id OR (storage.foldername(name))[1] = v_user_id::text);
+
+  -- 2. Delete notes and folders
   DELETE FROM public.notes WHERE user_id = v_user_id;
   DELETE FROM public.folders WHERE user_id = v_user_id;
+
+  -- 3. Delete from auth.users (cascades to profiles, tasks, task_completions, daily_data, friendships, preferences, stats)
+  DELETE FROM auth.users WHERE id = v_user_id;
 
   RETURN jsonb_build_object('success', true);
 END;
@@ -363,30 +428,56 @@ CREATE TRIGGER friendships_updated_at BEFORE UPDATE ON public.friendships FOR EA
 CREATE TRIGGER folders_updated_at BEFORE UPDATE ON public.folders FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
 CREATE TRIGGER notes_updated_at BEFORE UPDATE ON public.notes FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
 
--- Friendship Transition Safety Trigger
+-- Friendship Transition Safety Trigger (enforces INSERT status and valid state transitions)
 CREATE OR REPLACE FUNCTION public.enforce_friendship_security() RETURNS trigger AS $$
 DECLARE
     current_uid uuid;
 BEGIN
+    current_uid := auth.uid();
+
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.status != 'pending' THEN
+            RAISE EXCEPTION 'Friendship requests must be initiated in pending status.';
+        END IF;
+        IF NEW.requester_id = NEW.addressee_id THEN
+            RAISE EXCEPTION 'Cannot friend oneself.';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    -- UPDATE validations
     IF OLD.requester_id IS DISTINCT FROM NEW.requester_id THEN RAISE EXCEPTION 'Cannot modify requester_id.'; END IF;
     IF OLD.addressee_id IS DISTINCT FROM NEW.addressee_id THEN RAISE EXCEPTION 'Cannot modify addressee_id.'; END IF;
     IF OLD.created_at IS DISTINCT FROM NEW.created_at THEN RAISE EXCEPTION 'Cannot modify created_at.'; END IF;
     
-    current_uid := NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
     IF OLD.status IS DISTINCT FROM NEW.status AND current_uid IS NOT NULL THEN
         IF OLD.status = 'pending' THEN
-            IF current_uid = OLD.requester_id AND NEW.status != 'cancelled' THEN RAISE EXCEPTION 'Requester can only cancel.'; END IF;
-            IF current_uid = OLD.addressee_id AND NEW.status NOT IN ('accepted', 'declined') THEN RAISE EXCEPTION 'Addressee can only accept or decline.'; END IF;
+            IF current_uid = OLD.requester_id AND NEW.status != 'cancelled' THEN 
+                RAISE EXCEPTION 'Requester can only cancel pending request.'; 
+            END IF;
+            IF current_uid = OLD.addressee_id AND NEW.status NOT IN ('accepted', 'declined') THEN 
+                RAISE EXCEPTION 'Addressee can only accept or decline.'; 
+            END IF;
+        ELSIF OLD.status IN ('declined', 'cancelled') THEN
+            IF current_uid = OLD.requester_id AND NEW.status = 'pending' THEN
+                RETURN NEW;
+            ELSE
+                RAISE EXCEPTION 'Cannot change status after it has been %.', OLD.status;
+            END IF;
         ELSE
             RAISE EXCEPTION 'Cannot change status after it has been %.', OLD.status;
         END IF;
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
-CREATE TRIGGER friendships_security_trigger BEFORE UPDATE ON public.friendships FOR EACH ROW EXECUTE PROCEDURE public.enforce_friendship_security();
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- Auth Signup Trigger
+DROP TRIGGER IF EXISTS friendships_security_trigger ON public.friendships;
+CREATE TRIGGER friendships_security_trigger 
+BEFORE INSERT OR UPDATE ON public.friendships 
+FOR EACH ROW EXECUTE PROCEDURE public.enforce_friendship_security();
+
+-- Auth Signup Trigger (handles username collision)
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS trigger AS $$
 DECLARE
@@ -398,6 +489,11 @@ BEGIN
 
   IF v_username = '' THEN
     v_username := 'user_' || SUBSTRING(REPLACE(new.id::text, '-', ''), 1, 10);
+  END IF;
+
+  -- Handle collision gracefully
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE username = v_username) THEN
+    v_username := v_username || '_' || SUBSTRING(REPLACE(new.id::text, '-', ''), 1, 6);
   END IF;
 
   INSERT INTO public.profiles (
@@ -437,7 +533,14 @@ ALTER TABLE public.user_stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Profiles are viewable by all users" ON public.profiles FOR SELECT USING (true);
+-- Profile visibility-respecting policy
+CREATE POLICY "profiles_select_policy" ON public.profiles 
+FOR SELECT USING (
+  visibility = 'public' 
+  OR auth.uid() = id 
+  OR (visibility = 'friends' AND public.is_connected_to_user(id))
+);
+
 CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
@@ -448,12 +551,16 @@ CREATE POLICY "task_completions_insert" ON public.task_completions FOR INSERT WI
   auth.uid() = user_id AND
   EXISTS (SELECT 1 FROM public.tasks t WHERE t.id = task_id AND t.user_id = auth.uid())
 );
+CREATE POLICY "task_completions_update" ON public.task_completions FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "task_completions_delete" ON public.task_completions FOR DELETE USING (auth.uid() = user_id);
 
 CREATE POLICY "daily_data_owner" ON public.daily_data FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "friendships_select" ON public.friendships FOR SELECT USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
-CREATE POLICY "friendships_insert" ON public.friendships FOR INSERT WITH CHECK (auth.uid() = requester_id);
+CREATE POLICY "friendships_insert" ON public.friendships FOR INSERT WITH CHECK (
+  auth.uid() = requester_id AND 
+  status = 'pending'
+);
 CREATE POLICY "friendships_update" ON public.friendships FOR UPDATE USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
 CREATE POLICY "friendships_delete" ON public.friendships FOR DELETE USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
 
@@ -461,20 +568,119 @@ CREATE POLICY "user_preferences_owner" ON public.user_preferences FOR ALL USING 
 CREATE POLICY "user_stats_owner" ON public.user_stats FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "folders_owner" ON public.folders FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "notes_owner" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "notes_owner" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (
+  auth.uid() = user_id AND
+  (folder_id IS NULL OR EXISTS (SELECT 1 FROM public.folders f WHERE f.id = folder_id AND f.user_id = auth.uid()))
+);
+
+-- Note Folder Ownership Trigger (defense in depth)
+CREATE OR REPLACE FUNCTION public.enforce_note_folder_ownership() RETURNS trigger AS $$
+BEGIN
+  IF NEW.folder_id IS NOT NULL THEN
+    IF NOT EXISTS (SELECT 1 FROM public.folders WHERE id = NEW.folder_id AND user_id = auth.uid()) THEN
+      RAISE EXCEPTION 'Referenced folder must belong to the same user.';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+DROP TRIGGER IF EXISTS notes_folder_ownership_trigger ON public.notes;
+CREATE TRIGGER notes_folder_ownership_trigger
+BEFORE INSERT OR UPDATE ON public.notes
+FOR EACH ROW EXECUTE PROCEDURE public.enforce_note_folder_ownership();
 
 -- ==========================================
 -- 6. INDEXES
 -- ==========================================
 CREATE INDEX IF NOT EXISTS tasks_user_id_idx ON public.tasks(user_id);
 CREATE INDEX IF NOT EXISTS task_completions_user_date_idx ON public.task_completions(user_id, completed_date);
+CREATE INDEX IF NOT EXISTS task_completions_task_id_idx ON public.task_completions(task_id);
 CREATE INDEX IF NOT EXISTS friendships_requester_idx ON public.friendships(requester_id);
 CREATE INDEX IF NOT EXISTS friendships_addressee_idx ON public.friendships(addressee_id);
 CREATE INDEX IF NOT EXISTS notes_user_id_updated_idx ON public.notes(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS notes_folder_id_idx ON public.notes(folder_id);
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_username_lower_idx ON public.profiles (lower(username));
+CREATE INDEX IF NOT EXISTS profiles_username_trgm_idx ON public.profiles USING gin (username gin_trgm_ops);
 
 -- ==========================================
 -- 7. STORAGE BUCKETS & POLICIES
 -- ==========================================
-INSERT INTO storage.buckets (id, name, public) VALUES ('profile-images', 'profile-images', true) ON CONFLICT DO NOTHING;
-INSERT INTO storage.buckets (id, name, public) VALUES ('profile-covers', 'profile-covers', true) ON CONFLICT DO NOTHING;
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) 
+VALUES 
+  ('profile-images', 'profile-images', true, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+  ('profile-covers', 'profile-covers', true, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+ON CONFLICT (id) DO UPDATE 
+SET file_size_limit = 5242880,
+    allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'objects') THEN
+    DROP POLICY IF EXISTS "Users can upload their own avatars and covers" ON storage.objects;
+    DROP POLICY IF EXISTS "Users can update their own avatars and covers" ON storage.objects;
+    DROP POLICY IF EXISTS "Users can delete their own avatars and covers" ON storage.objects;
+    
+    CREATE POLICY "Users can upload their own avatars and covers" ON storage.objects
+    FOR INSERT WITH CHECK (
+      bucket_id IN ('profile-images', 'profile-covers') AND
+      (
+        auth.uid() = owner OR
+        (storage.foldername(name))[1] = auth.uid()::text OR
+        name LIKE (auth.uid()::text || '-%')
+      )
+    );
+
+    CREATE POLICY "Users can update their own avatars and covers" ON storage.objects
+    FOR UPDATE USING (
+      bucket_id IN ('profile-images', 'profile-covers') AND
+      (
+        auth.uid() = owner OR
+        (storage.foldername(name))[1] = auth.uid()::text OR
+        name LIKE (auth.uid()::text || '-%')
+      )
+    );
+
+    CREATE POLICY "Users can delete their own avatars and covers" ON storage.objects
+    FOR DELETE USING (
+      bucket_id IN ('profile-images', 'profile-covers') AND
+      (
+        auth.uid() = owner OR
+        (storage.foldername(name))[1] = auth.uid()::text OR
+        name LIKE (auth.uid()::text || '-%')
+      )
+    );
+  END IF;
+END $$;
+
+-- ==========================================
+-- 8. BACKFILL EXISTING USERS
+-- ==========================================
+DO $$
+DECLARE
+  u record;
+  v_uname text;
+BEGIN
+  FOR u IN SELECT id, raw_user_meta_data FROM auth.users LOOP
+    v_uname := LOWER(TRIM(COALESCE(u.raw_user_meta_data->>'username', '')));
+    IF v_uname = '' THEN
+      v_uname := 'user_' || SUBSTRING(REPLACE(u.id::text, '-', ''), 1, 10);
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.profiles WHERE username = v_uname AND id != u.id) THEN
+      v_uname := v_uname || '_' || SUBSTRING(REPLACE(u.id::text, '-', ''), 1, 6);
+    END IF;
+
+    INSERT INTO public.profiles (id, username, display_name, full_name, visibility, activity_visibility)
+    VALUES (
+      u.id, 
+      v_uname, 
+      COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', 'User'),
+      COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', 'User'),
+      'public',
+      'public'
+    ) ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.user_preferences (user_id) VALUES (u.id) ON CONFLICT (user_id) DO NOTHING;
+    INSERT INTO public.user_stats (user_id, current_streak) VALUES (u.id, 0) ON CONFLICT (user_id) DO NOTHING;
+  END LOOP;
+END $$;
+
