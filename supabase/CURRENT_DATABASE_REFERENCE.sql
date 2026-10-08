@@ -128,6 +128,28 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
+-- Check Username Available (SECURITY DEFINER to check across private and public profiles safely)
+CREATE OR REPLACE FUNCTION public.check_username_available(target_username text)
+RETURNS boolean AS $$
+DECLARE
+  v_clean text;
+BEGIN
+  v_clean := lower(trim(COALESCE(target_username, '')));
+  IF v_clean = '' OR length(v_clean) < 3 OR length(v_clean) > 20 THEN
+    RETURN false;
+  END IF;
+
+  IF v_clean !~ '^[a-z0-9_]{3,20}$' THEN
+    RETURN false;
+  END IF;
+
+  RETURN NOT EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE lower(username) = v_clean
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
 -- Profile Lookup (available to anon and authenticated)
 CREATE OR REPLACE FUNCTION public.get_profile_by_username(target_username text)
 RETURNS TABLE (
@@ -403,6 +425,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Grants
 GRANT EXECUTE ON FUNCTION public.is_connected_to_user(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_username_available(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_profile_by_username(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.search_users_by_username(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_friend_profiles(uuid[]) TO authenticated;
@@ -566,6 +589,15 @@ CREATE POLICY "friendships_delete" ON public.friendships FOR DELETE USING (auth.
 
 CREATE POLICY "user_preferences_owner" ON public.user_preferences FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "user_stats_owner" ON public.user_stats FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "user_stats_friends_read" ON public.user_stats FOR SELECT USING (
+  auth.uid() = user_id OR
+  EXISTS (
+    SELECT 1 FROM public.friendships f
+    WHERE f.status = 'accepted'
+      AND ((f.requester_id = auth.uid() AND f.addressee_id = user_stats.user_id)
+        OR (f.addressee_id = auth.uid() AND f.requester_id = user_stats.user_id))
+  )
+);
 
 CREATE POLICY "folders_owner" ON public.folders FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "notes_owner" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (
