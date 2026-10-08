@@ -22,6 +22,13 @@ export function Signup() {
   const handleGoogleSignup = async () => {
     setGoogleLoading(true);
     setError('');
+
+    if (import.meta.env.VITE_SUPABASE_URL === undefined || import.meta.env.VITE_SUPABASE_URL.trim() === '') {
+      setError('Configuration Error: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing in your .env.local file. Please add your real Supabase credentials to sign up.');
+      setGoogleLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -29,7 +36,11 @@ export function Signup() {
       }
     });
     if (error) {
-      setError(error.message);
+      if (error.message === 'Failed to fetch') {
+        setError('Network Error: Failed to fetch. Please verify your VITE_SUPABASE_URL in .env.local is correct.');
+      } else {
+        setError(error.message);
+      }
       setGoogleLoading(false);
     }
   };
@@ -40,6 +51,12 @@ export function Signup() {
     setError('');
 
     const cleanUsername = username.toLowerCase().trim();
+
+    if (import.meta.env.VITE_SUPABASE_URL === undefined || import.meta.env.VITE_SUPABASE_URL.trim() === '') {
+      setError('Configuration Error: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing in your .env.local file. Please add your real Supabase credentials to sign up.');
+      setLoading(false);
+      return;
+    }
 
     if (password.length < 8) {
       setError('Password must be at least 8 characters long.');
@@ -91,7 +108,11 @@ export function Signup() {
     });
 
     if (authError) {
-      setError(authError.message);
+      if (authError.message === 'Failed to fetch') {
+        setError('Network Error: Failed to fetch. Please verify your VITE_SUPABASE_URL in .env.local is correct.');
+      } else {
+        setError(authError.message);
+      }
     } else if (authData.user) {
       if (authData.session) {
         // Upsert profile row immediately when session is active
