@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Loader2, Check, X, Search } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { calculateStreakFromDates } from '../lib/dataManager';
 
 type Profile = {
   id: string;
@@ -44,15 +45,50 @@ export function FriendsPage() {
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<DetailedError | null>(null);
-  const [myStreak, setMyStreak] = useState<number>(0);
+  const [myStreak, setMyStreak] = useState<number>(profile?.current_streak || 0);
 
-  const fetchFriendships = async () => {
+  useEffect(() => {
+    if (profile?.current_streak !== undefined && profile.current_streak > 0) {
+      setMyStreak(profile.current_streak);
+    }
+  }, [profile?.current_streak]);
+
+  const fetchFriendships = useCallback(async () => {
     if (!user) return;
     setError(null);
     try {
+      // Step A: Load user's own streak with multi-layer resilience
+      let userStreak = profile?.current_streak || 0;
+      if (userStreak === 0 && user) {
+        const { data: myStats } = await supabase
+          .from('user_stats')
+          .select('current_streak')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
+        if (myStats?.current_streak && myStats.current_streak > 0) {
+          userStreak = myStats.current_streak;
+        } else {
+          const { data: recentCompletions } = await supabase
+            .from('task_completions')
+            .select('completed_date')
+            .eq('user_id', user.id)
+            .order('completed_date', { ascending: false })
+            .limit(30);
 
-      // Layer 1: Load friendship rows. Column is addressee_id (not addressee_id)
+          if (recentCompletions && recentCompletions.length > 0) {
+            userStreak = calculateStreakFromDates(
+              recentCompletions.map(c => c.completed_date)
+            );
+            if (userStreak > 0) {
+              supabase.from('user_stats').upsert({ user_id: user.id, current_streak: userStreak }).then();
+            }
+          }
+        }
+      }
+      setMyStreak(userStreak);
+
+      // Layer 1: Load friendship rows. Column is addressee_id
       const { data: rels, error: relsError } = await supabase
         .from('friendships')
         .select('*')
@@ -60,12 +96,9 @@ export function FriendsPage() {
         .neq('status', 'cancelled')
         .neq('status', 'declined');
 
-
-
       if (relsError) throw { ...relsError, query: "friendships.select().or('requester_id,addressee_id')" };
 
       if (!rels || rels.length === 0) {
-
         setFriendships([]);
         setLoading(false);
         return;
@@ -74,18 +107,12 @@ export function FriendsPage() {
       // Layer 2: Determine the other user's ID for each row
       const otherUserIds = rels.map(r => r.requester_id === user.id ? r.addressee_id : r.requester_id);
 
-
-      // Layer 3: Use get_friend_profiles RPC (SECURITY DEFINER) instead of direct
-      // profiles table access. The direct query fails when the other user's profile
-      // visibility is not 'public', because RLS blocks it.
-      // The RPC bypasses visibility for connected users (pending OR accepted).
+      // Layer 3: Use get_friend_profiles RPC (SECURITY DEFINER)
       const { data: profiles, error: profileError } = await supabase.rpc('get_friend_profiles', {
         user_ids: otherUserIds
       });
 
-
-
-      // If the RPC doesn't exist yet, fall back to direct query (joining user_stats)
+      // If the RPC doesn't exist yet or errors, fall back to direct query (joining user_stats)
       let resolvedProfiles = profiles;
       if (profileError) {
         console.warn('[FRIENDS] get_friend_profiles RPC failed, falling back to direct query:', profileError.message);
@@ -122,7 +149,6 @@ export function FriendsPage() {
       }
 
       setFriendships(combined);
-      setMyStreak(profile?.current_streak || 0);
 
     } catch (err: any) {
       console.error('[FRIENDS] Fatal error:', err);
@@ -135,24 +161,25 @@ export function FriendsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, profile?.current_streak]);
 
   useEffect(() => {
     fetchFriendships();
 
     if (!user) return;
 
-    // Realtime: decorative enhancement, never blocks initial load
+    // Realtime updates for friendship changes and user stats updates
     const channel = supabase
       .channel(`friendships_changes_${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `requester_id=eq.${user.id}` }, () => fetchFriendships())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `addressee_id=eq.${user.id}` }, () => fetchFriendships())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_stats' }, () => fetchFriendships())
       .subscribe((_status, err) => {
         if (err) console.warn('[FRIENDS] Realtime error (non-fatal):', err);
       });
 
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, fetchFriendships]);
 
   useEffect(() => {
     async function performSearch() {

@@ -236,31 +236,52 @@ export const getDayCompletionInfo = (data: AppData, dateStr: string) => {
   };
 };
 
-export const calculateStats = (data: AppData, year: number) => {
-  let completedDays = 0;
-  let totalTasksCompleted = 0;
+export const calculateStreakFromDates = (dateStrings: string[]): number => {
+  if (!dateStrings || dateStrings.length === 0) return 0;
 
-  const allCompletedDates: Date[] = [];
+  const uniqueDateStrs = new Set(
+    dateStrings.map(d => d.split('T')[0]).filter(Boolean)
+  );
 
-  Object.keys(data.days).forEach(dateStr => {
-    const info = getDayCompletionInfo(data, dateStr);
-    if (info.completed) {
-      allCompletedDates.push(parseISO(dateStr));
-    }
-    if (dateStr.startsWith(year.toString())) {
-      if (info.completed) completedDays++;
-      totalTasksCompleted += info.completedCount;
-    }
-  });
+  if (uniqueDateStrs.size === 0) return 0;
 
-  allCompletedDates.sort((a, b) => a.getTime() - b.getTime());
+  const today = startOfDay(new Date());
+  const todayStr = format(today, 'yyyy-MM-dd');
+  const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
 
-  let currentStreak = 0;
-  let longestStreak = 0;
+  const hasToday = uniqueDateStrs.has(todayStr);
+  const hasYesterday = uniqueDateStrs.has(yesterdayStr);
+
+  if (!hasToday && !hasYesterday) {
+    return 0;
+  }
+
+  let cur = hasToday ? today : subDays(today, 1);
+  let streak = 0;
+
+  while (uniqueDateStrs.has(format(cur, 'yyyy-MM-dd'))) {
+    streak++;
+    cur = subDays(cur, 1);
+  }
+
+  return streak;
+};
+
+export const calculateLongestStreakFromDates = (dateStrings: string[]): number => {
+  if (!dateStrings || dateStrings.length === 0) return 0;
+
+  const uniqueSortedDates = Array.from(new Set(
+    dateStrings.map(d => d.split('T')[0]).filter(Boolean)
+  )).sort();
+
+  if (uniqueSortedDates.length === 0) return 0;
+
+  let longest = 0;
   let currentRun = 0;
   let prevDate: Date | null = null;
 
-  for (const date of allCompletedDates) {
+  for (const dateStr of uniqueSortedDates) {
+    const date = parseISO(dateStr);
     if (!prevDate) {
       currentRun = 1;
     } else {
@@ -271,35 +292,34 @@ export const calculateStats = (data: AppData, year: number) => {
         currentRun = 1;
       }
     }
-    if (currentRun > longestStreak) {
-      longestStreak = currentRun;
+    if (currentRun > longest) {
+      longest = currentRun;
     }
     prevDate = date;
   }
 
-  const today = startOfDay(new Date());
-  const yesterday = subDays(today, 1);
+  return longest;
+};
 
-  if (allCompletedDates.length > 0) {
-    let tempStreak = 0;
-    const todayStr = format(today, 'yyyy-MM-dd');
-    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+export const calculateStats = (data: AppData, year: number) => {
+  let completedDays = 0;
+  let totalTasksCompleted = 0;
 
-    if (getDayCompletionInfo(data, todayStr).completed) {
-       let cur = today;
-       while (getDayCompletionInfo(data, format(cur, 'yyyy-MM-dd')).completed) {
-         tempStreak++;
-         cur = subDays(cur, 1);
-       }
-    } else if (getDayCompletionInfo(data, yesterdayStr).completed) {
-       let cur = yesterday;
-       while (getDayCompletionInfo(data, format(cur, 'yyyy-MM-dd')).completed) {
-         tempStreak++;
-         cur = subDays(cur, 1);
-       }
+  const activeDates: string[] = [];
+
+  Object.keys(data.days).forEach(dateStr => {
+    const info = getDayCompletionInfo(data, dateStr);
+    if (info.completed || info.completedCount > 0) {
+      activeDates.push(dateStr);
     }
-    currentStreak = tempStreak;
-  }
+    if (dateStr.startsWith(year.toString())) {
+      if (info.completed || info.completedCount > 0) completedDays++;
+      totalTasksCompleted += info.completedCount;
+    }
+  });
+
+  const currentStreak = calculateStreakFromDates(activeDates);
+  const longestStreak = calculateLongestStreakFromDates(activeDates);
 
   const completionRate = Object.keys(data.days).length > 0
     ? Math.round((completedDays / Object.keys(data.days).length) * 100)

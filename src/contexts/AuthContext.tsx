@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import { DataManager } from '../lib/dataManager';
+import { DataManager, calculateStreakFromDates } from '../lib/dataManager';
 
 export type Profile = {
   id: string;
@@ -32,7 +32,7 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
   checkLocalData: () => false,
   migrateLocalData: async () => {},
-  refreshProfile: async () => {},
+  refreshProfile: async () => {}
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -67,9 +67,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       ]);
 
       if (!profileRes.error && profileRes.data) {
+        let currentStreak = statsRes.data?.current_streak ?? 0;
+
+        if (currentStreak === 0) {
+          const { data: completions } = await supabase
+            .from('task_completions')
+            .select('completed_date')
+            .eq('user_id', userId)
+            .order('completed_date', { ascending: false })
+            .limit(30);
+
+          if (completions && completions.length > 0) {
+            currentStreak = calculateStreakFromDates(completions.map(c => c.completed_date));
+            if (currentStreak > 0) {
+              supabase.from('user_stats').upsert({ user_id: userId, current_streak: currentStreak }).then();
+            }
+          }
+        }
+
         setProfile({
           ...profileRes.data,
-          current_streak: statsRes.data?.current_streak ?? 0
+          current_streak: currentStreak
         } as Profile);
       }
     } catch (err) {

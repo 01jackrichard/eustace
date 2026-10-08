@@ -146,7 +146,7 @@ function ProfileSetupFlow({ onComplete }: { onComplete: () => Promise<void> }) {
       setSaving(false);
     } else {
       await supabase.from('user_preferences').upsert({ user_id: user.id }, { onConflict: 'user_id' });
-      await supabase.from('user_stats').upsert({ user_id: user.id, current_streak: 0 }, { onConflict: 'user_id' });
+      await supabase.from('user_stats').upsert({ user_id: user.id, current_streak: 0 }, { onConflict: 'user_id', ignoreDuplicates: true });
       await onComplete();
     }
   };
