@@ -128,6 +128,28 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
+-- Check Username Available (SECURITY DEFINER to check across private and public profiles safely)
+CREATE OR REPLACE FUNCTION public.check_username_available(target_username text)
+RETURNS boolean AS $$
+DECLARE
+  v_clean text;
+BEGIN
+  v_clean := lower(trim(COALESCE(target_username, '')));
+  IF v_clean = '' OR length(v_clean) < 3 OR length(v_clean) > 20 THEN
+    RETURN false;
+  END IF;
+
+  IF v_clean !~ '^[a-z0-9_]{3,20}$' THEN
+    RETURN false;
+  END IF;
+
+  RETURN NOT EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE lower(username) = v_clean
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
 -- Profile Lookup (available to anon and authenticated)
 CREATE OR REPLACE FUNCTION public.get_profile_by_username(target_username text)
 RETURNS TABLE (
@@ -196,7 +218,7 @@ BEGIN
         WHERE f.status = 'accepted' 
           AND ((f.requester_id = auth.uid() AND f.addressee_id = p.id) 
             OR (f.addressee_id = auth.uid() AND f.requester_id = p.id))
-      ) THEN COALESCE(s.current_streak, 0)
+      ) THEN COALESCE(NULLIF(s.current_streak, 0), public.calculate_user_streak(p.id), 0)
       ELSE 0
     END as current_streak
   FROM public.profiles p
@@ -403,6 +425,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Grants
 GRANT EXECUTE ON FUNCTION public.is_connected_to_user(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_username_available(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_profile_by_username(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.search_users_by_username(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_friend_profiles(uuid[]) TO authenticated;
@@ -566,6 +589,15 @@ CREATE POLICY "friendships_delete" ON public.friendships FOR DELETE USING (auth.
 
 CREATE POLICY "user_preferences_owner" ON public.user_preferences FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "user_stats_owner" ON public.user_stats FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "user_stats_friends_read" ON public.user_stats FOR SELECT USING (
+  auth.uid() = user_id OR
+  EXISTS (
+    SELECT 1 FROM public.friendships f
+    WHERE f.status = 'accepted'
+      AND ((f.requester_id = auth.uid() AND f.addressee_id = user_stats.user_id)
+        OR (f.addressee_id = auth.uid() AND f.requester_id = user_stats.user_id))
+  )
+);
 
 CREATE POLICY "folders_owner" ON public.folders FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "notes_owner" ON public.notes FOR ALL USING (auth.uid() = user_id) WITH CHECK (
@@ -683,4 +715,96 @@ BEGIN
     INSERT INTO public.user_stats (user_id, current_streak) VALUES (u.id, 0) ON CONFLICT (user_id) DO NOTHING;
   END LOOP;
 END $$;
+
+-- Dynamic User Streak Calculation
+CREATE OR REPLACE FUNCTION public.calculate_user_streak(target_user_id uuid)
+RETURNS int AS $$
+DECLARE
+  v_streak int := 0;
+BEGIN
+  WITH user_active_dates AS (
+    SELECT DISTINCT completed_date AS active_date
+    FROM public.task_completions
+    WHERE user_id = target_user_id
+    UNION
+    SELECT DISTINCT date AS active_date
+    FROM public.daily_data
+    WHERE user_id = target_user_id AND manual_completion = true
+  ),
+  ordered_dates AS (
+    SELECT 
+      active_date,
+      active_date - (ROW_NUMBER() OVER (ORDER BY active_date))::int AS grp
+    FROM user_active_dates
+  ),
+  streaks AS (
+    SELECT 
+      grp,
+      COUNT(*)::int AS streak_length,
+      MAX(active_date) AS streak_end
+    FROM ordered_dates
+    GROUP BY grp
+  )
+  SELECT streak_length
+  INTO v_streak
+  FROM streaks
+  WHERE streak_end >= CURRENT_DATE - 1
+  ORDER BY streak_end DESC
+  LIMIT 1;
+
+  RETURN COALESCE(v_streak, 0);
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '';
+
+REVOKE ALL ON FUNCTION public.calculate_user_streak(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.calculate_user_streak(uuid) TO authenticated;
+
+-- Completion Streak Sync Trigger
+CREATE OR REPLACE FUNCTION public.sync_user_streak_on_completion()
+RETURNS trigger AS $$
+DECLARE
+  v_user_id uuid;
+  v_streak int;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_user_id := OLD.user_id;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.user_id IS DISTINCT FROM NEW.user_id THEN
+      v_streak := public.calculate_user_streak(OLD.user_id);
+      INSERT INTO public.user_stats (user_id, current_streak, updated_at)
+      VALUES (OLD.user_id, v_streak, now())
+      ON CONFLICT (user_id)
+      DO UPDATE SET current_streak = EXCLUDED.current_streak, updated_at = EXCLUDED.updated_at;
+    END IF;
+    v_user_id := NEW.user_id;
+  ELSE
+    v_user_id := NEW.user_id;
+  END IF;
+
+  IF v_user_id IS NOT NULL THEN
+    v_streak := public.calculate_user_streak(v_user_id);
+
+    INSERT INTO public.user_stats (user_id, current_streak, updated_at)
+    VALUES (v_user_id, v_streak, now())
+    ON CONFLICT (user_id)
+    DO UPDATE SET 
+      current_streak = EXCLUDED.current_streak,
+      updated_at = EXCLUDED.updated_at;
+  END IF;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+DROP TRIGGER IF EXISTS trigger_sync_user_streak_completions ON public.task_completions;
+CREATE TRIGGER trigger_sync_user_streak_completions
+AFTER INSERT OR UPDATE OR DELETE ON public.task_completions
+FOR EACH ROW
+EXECUTE FUNCTION public.sync_user_streak_on_completion();
+
+DROP TRIGGER IF EXISTS trigger_sync_user_streak_daily ON public.daily_data;
+CREATE TRIGGER trigger_sync_user_streak_daily
+AFTER INSERT OR UPDATE OR DELETE ON public.daily_data
+FOR EACH ROW
+EXECUTE FUNCTION public.sync_user_streak_on_completion();
 

@@ -7,7 +7,7 @@ import { addDays, parseISO, format } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export function useProductivityData(year: number) {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -100,13 +100,15 @@ export function useProductivityData(year: number) {
   }, [fetchData]);
 
   useEffect(() => {
-    if (data && user && profile) {
+    if (data && user) {
       const stats = calculateStats(data, year);
-      if (stats.currentStreak !== profile.current_streak) {
-        supabase.from('user_stats').upsert({ user_id: user.id, current_streak: stats.currentStreak }).then();
+      if (stats.currentStreak !== profile?.current_streak) {
+        supabase.from('user_stats').upsert({ user_id: user.id, current_streak: stats.currentStreak }).then(() => {
+          refreshProfile();
+        });
       }
     }
-  }, [data, user, profile, year]);
+  }, [data, user, profile?.current_streak, year, refreshProfile]);
 
   const addTask = async (taskData: Omit<Task, 'id'>) => {
     if (!user || !data) return false;

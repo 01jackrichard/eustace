@@ -46,12 +46,12 @@ export function ProtectedLayout() {
 
 function ProfileSetupFlow({ onComplete }: { onComplete: () => Promise<void> }) {
   const { user } = useAuth();
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState((user?.user_metadata?.username as string) || '');
   const [name, setName] = useState(user?.user_metadata?.full_name || user?.user_metadata?.name || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const debouncedUsername = useDebounce(username.toLowerCase().trim(), 500);
+  const debouncedUsername = useDebounce(username.toLowerCase().trim(), 400);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
 
   const validateUsername = (u: string) => {
@@ -69,24 +69,63 @@ function ProfileSetupFlow({ onComplete }: { onComplete: () => Promise<void> }) {
         return;
       }
       setUsernameStatus('checking');
-      const { data } = await supabase.from('profiles').select('id').eq('username', debouncedUsername).single();
-      if (data) {
-        setUsernameStatus('taken');
-      } else {
-        setUsernameStatus('available');
+
+      let isAvailable = true;
+      try {
+        const { data: rpcAvailable, error: rpcError } = await supabase.rpc('check_username_available', {
+          target_username: debouncedUsername
+        });
+        if (!rpcError && typeof rpcAvailable === 'boolean') {
+          isAvailable = rpcAvailable;
+        } else {
+          const { data: existingUser } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('username', debouncedUsername)
+            .maybeSingle();
+          if (existingUser && existingUser.id !== user?.id) {
+            isAvailable = false;
+          }
+        }
+      } catch {
+        const { data: existingUser } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', debouncedUsername)
+          .maybeSingle();
+        if (existingUser && existingUser.id !== user?.id) {
+          isAvailable = false;
+        }
       }
+
+      setUsernameStatus(isAvailable ? 'available' : 'taken');
     }
     checkUsername();
-  }, [debouncedUsername]);
+  }, [debouncedUsername, user?.id]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     const cleanUsername = username.toLowerCase().trim();
-    if (usernameStatus !== 'available' || !name.trim() || !validateUsername(cleanUsername)) return;
+    if (!name.trim() || !validateUsername(cleanUsername)) return;
 
     setSaving(true);
     setError(null);
+
+    // Final pre-flight availability check
+    try {
+      const { data: rpcAvailable, error: rpcError } = await supabase.rpc('check_username_available', {
+        target_username: cleanUsername
+      });
+      if (!rpcError && rpcAvailable === false) {
+        setError('Username is already taken. Please choose another.');
+        setUsernameStatus('taken');
+        setSaving(false);
+        return;
+      }
+    } catch {
+      // Proceed to DB upsert which enforces DB-level unique index
+    }
 
     const { error: insertError } = await supabase.from('profiles').upsert({
       id: user.id,
@@ -98,11 +137,16 @@ function ProfileSetupFlow({ onComplete }: { onComplete: () => Promise<void> }) {
     }, { onConflict: 'id' });
 
     if (insertError) {
-      setError(insertError.message);
+      if (insertError.message.toLowerCase().includes('unique') || insertError.message.toLowerCase().includes('duplicate')) {
+        setError('This username is already taken. Please choose another.');
+        setUsernameStatus('taken');
+      } else {
+        setError(insertError.message);
+      }
       setSaving(false);
     } else {
       await supabase.from('user_preferences').upsert({ user_id: user.id }, { onConflict: 'user_id' });
-      await supabase.from('user_stats').upsert({ user_id: user.id, current_streak: 0 }, { onConflict: 'user_id' });
+      await supabase.from('user_stats').upsert({ user_id: user.id, current_streak: 0 }, { onConflict: 'user_id', ignoreDuplicates: true });
       await onComplete();
     }
   };

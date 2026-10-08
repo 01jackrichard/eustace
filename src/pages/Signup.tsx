@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Mail, ExternalLink, ArrowLeft } from 'lucide-react';
 
 export function Signup() {
   const [name, setName] = useState('');
@@ -12,6 +12,8 @@ export function Signup() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState('');
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -23,7 +25,7 @@ export function Signup() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin
+        redirectTo: `${window.location.origin}/auth/callback`
       }
     });
     if (error) {
@@ -37,16 +39,40 @@ export function Signup() {
     setLoading(true);
     setError('');
 
+    const cleanUsername = username.toLowerCase().trim();
+
     if (password.length < 8) {
       setError('Password must be at least 8 characters long.');
       setLoading(false);
       return;
     }
 
-    // Check if username exists
-    const { data: existingUser } = await supabase.from('profiles').select('id').eq('username', username).maybeSingle();
-    if (existingUser) {
-      setError('Username is already taken.');
+    if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
+      setError('Username must be 3-20 characters and contain only letters, numbers, or underscores.');
+      setLoading(false);
+      return;
+    }
+
+    // Check if username exists via SECURITY DEFINER RPC (bypasses RLS visibility)
+    let isAvailable = true;
+    try {
+      const { data: rpcAvailable, error: rpcError } = await supabase.rpc('check_username_available', {
+        target_username: cleanUsername
+      });
+      if (!rpcError && typeof rpcAvailable === 'boolean') {
+        isAvailable = rpcAvailable;
+      } else {
+        // Fallback check
+        const { data: existingUser } = await supabase.from('profiles').select('id').eq('username', cleanUsername).maybeSingle();
+        if (existingUser) isAvailable = false;
+      }
+    } catch {
+      const { data: existingUser } = await supabase.from('profiles').select('id').eq('username', cleanUsername).maybeSingle();
+      if (existingUser) isAvailable = false;
+    }
+
+    if (!isAvailable) {
+      setError('Username is already taken. Please choose another.');
       setLoading(false);
       return;
     }
@@ -57,9 +83,9 @@ export function Signup() {
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: {
-          username,
-          full_name: name,
-          name
+          username: cleanUsername,
+          full_name: name.trim(),
+          name: name.trim()
         }
       }
     });
@@ -68,24 +94,66 @@ export function Signup() {
       setError(authError.message);
     } else if (authData.user) {
       if (authData.session) {
-        // Fallback upsert in case trigger is pending
+        // Upsert profile row immediately when session is active
         await supabase.from('profiles').upsert({
           id: authData.user.id,
-          username,
-          full_name: name,
-          display_name: name,
+          username: cleanUsername,
+          full_name: name.trim(),
+          display_name: name.trim(),
           visibility: 'public',
           activity_visibility: 'public'
         }, { onConflict: 'id' });
         navigate('/dashboard');
       } else {
-        // Confirmation email required by Supabase auth configuration
-        setError('Please check your email to confirm your account before logging in.');
+        // Confirmation email required: show dedicated confirmation view
+        setSubmittedEmail(email);
+        setEmailSent(true);
       }
     }
     
     setLoading(false);
   };
+
+  if (emailSent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-background animate-fade-in">
+        <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-8 shadow-2xl text-center">
+          <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center mx-auto mb-6">
+            <Mail className="w-7 h-7 text-accent" />
+          </div>
+
+          <h1 className="text-2xl font-bold tracking-tight text-textMain mb-3">Check your inbox</h1>
+          <p className="text-textMuted text-sm leading-relaxed mb-6">
+            We sent a verification link to{' '}
+            <span className="text-textMain font-semibold break-all">{submittedEmail}</span>.
+            Click the link in your email to activate your Eustace workspace.
+          </p>
+
+          <div className="flex flex-col gap-3">
+            <a
+              href="https://mail.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-textMain text-background hover:bg-white font-semibold py-3 rounded-xl transition-colors flex justify-center items-center gap-2 text-sm"
+            >
+              Open Gmail <ExternalLink size={16} />
+            </a>
+
+            <Link
+              to="/login"
+              className="w-full bg-background border border-border hover:border-accent/40 text-textMain font-medium py-3 rounded-xl transition-colors flex justify-center items-center gap-2 text-sm"
+            >
+              <ArrowLeft size={16} /> Back to Log In
+            </Link>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-border/50 text-xs text-textMuted leading-relaxed">
+            Didn't receive an email? Check your spam folder or try logging in to resend verification.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background animate-fade-in">

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Loader2, ArrowLeft, Check } from 'lucide-react';
+import { Loader2, ArrowLeft, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 import { usePublicProductivityData } from '../hooks/usePublicProductivityData';
 import { ContributionGraph } from '../components/ContributionGraph';
 import { cn } from '../lib/utils';
@@ -90,11 +91,62 @@ export function PublicProfilePage() {
   };
 
   const handleAccept = async () => {
-    if (!friendship) return;
+    if (!friendship || !profile) return;
     setActionLoading(true);
-    await supabase.from('friendships').update({ status: 'accepted', updated_at: new Date().toISOString() }).eq('id', friendship.id);
-    await fetchFriendship(profile.id);
-    setActionLoading(false);
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .eq('id', friendship.id);
+
+      if (error) throw error;
+      toast.success('Friend request accepted');
+      await fetchFriendship(profile.id);
+    } catch {
+      toast.error('Failed to accept request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDecline = async () => {
+    if (!friendship || !profile) return;
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .update({ status: 'declined', updated_at: new Date().toISOString() })
+        .eq('id', friendship.id);
+
+      if (error) throw error;
+      toast.success('Friend request declined');
+      await fetchFriendship(profile.id);
+    } catch {
+      toast.error('Failed to decline request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!friendship || !profile) return;
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', friendship.id);
+
+      if (error) {
+        await supabase.from('friendships').delete().eq('id', friendship.id);
+      }
+      toast.success('Friend request cancelled');
+      await fetchFriendship(profile.id);
+    } catch {
+      toast.error('Failed to cancel request');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const getStatus = () => {
@@ -199,19 +251,38 @@ export function PublicProfilePage() {
                   </span>
                 )}
                 {currentStatus === 'sent' && (
-                  <span className="py-2.5 px-6 border border-border/40 text-textMuted text-[10px] font-bold tracking-[0.2em] uppercase rounded-full opacity-60">
-                    Request Sent
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="py-2.5 px-5 border border-border/40 text-textMuted text-[10px] font-bold tracking-[0.2em] uppercase rounded-full opacity-60">
+                      Request Sent
+                    </span>
+                    <button
+                      onClick={handleCancel}
+                      disabled={actionLoading}
+                      className="py-2.5 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />} Cancel
+                    </button>
+                  </div>
                 )}
                 {currentStatus === 'received' && (
-                  <button
-                    onClick={handleAccept}
-                    disabled={actionLoading}
-                    className="py-2.5 px-6 bg-accent text-background hover:bg-accent/90 text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                    Accept Request
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleAccept}
+                      disabled={actionLoading}
+                      className="py-2.5 px-6 bg-accent text-background hover:bg-accent/90 text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      Accept
+                    </button>
+                    <button
+                      onClick={handleDecline}
+                      disabled={actionLoading}
+                      className="py-2.5 px-5 border border-border/40 hover:border-red-400/50 bg-surface/50 hover:bg-red-400/10 text-textMuted hover:text-red-400 text-[10px] font-bold tracking-[0.2em] uppercase rounded-full transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                      Decline
+                    </button>
+                  </div>
                 )}
                 {currentStatus === 'none' && (
                   <button

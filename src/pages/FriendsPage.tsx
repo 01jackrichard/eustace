@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Loader2, Check, X, Search } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { calculateStreakFromDates } from '../lib/dataManager';
 
 type Profile = {
   id: string;
@@ -43,15 +45,50 @@ export function FriendsPage() {
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<DetailedError | null>(null);
-  const [myStreak, setMyStreak] = useState<number>(0);
+  const [myStreak, setMyStreak] = useState<number>(profile?.current_streak || 0);
 
-  const fetchFriendships = async () => {
+  useEffect(() => {
+    if (profile?.current_streak !== undefined && profile.current_streak > 0) {
+      setMyStreak(profile.current_streak);
+    }
+  }, [profile?.current_streak]);
+
+  const fetchFriendships = useCallback(async () => {
     if (!user) return;
     setError(null);
     try {
+      // Step A: Load user's own streak with multi-layer resilience
+      let userStreak = profile?.current_streak || 0;
+      if (userStreak === 0 && user) {
+        const { data: myStats } = await supabase
+          .from('user_stats')
+          .select('current_streak')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
+        if (myStats?.current_streak && myStats.current_streak > 0) {
+          userStreak = myStats.current_streak;
+        } else {
+          const { data: recentCompletions } = await supabase
+            .from('task_completions')
+            .select('completed_date')
+            .eq('user_id', user.id)
+            .order('completed_date', { ascending: false })
+            .limit(30);
 
-      // Layer 1: Load friendship rows. Column is addressee_id (not addressee_id)
+          if (recentCompletions && recentCompletions.length > 0) {
+            userStreak = calculateStreakFromDates(
+              recentCompletions.map(c => c.completed_date)
+            );
+            if (userStreak > 0) {
+              supabase.from('user_stats').upsert({ user_id: user.id, current_streak: userStreak }).then();
+            }
+          }
+        }
+      }
+      setMyStreak(userStreak);
+
+      // Layer 1: Load friendship rows. Column is addressee_id
       const { data: rels, error: relsError } = await supabase
         .from('friendships')
         .select('*')
@@ -59,12 +96,9 @@ export function FriendsPage() {
         .neq('status', 'cancelled')
         .neq('status', 'declined');
 
-
-
       if (relsError) throw { ...relsError, query: "friendships.select().or('requester_id,addressee_id')" };
 
       if (!rels || rels.length === 0) {
-
         setFriendships([]);
         setLoading(false);
         return;
@@ -73,28 +107,32 @@ export function FriendsPage() {
       // Layer 2: Determine the other user's ID for each row
       const otherUserIds = rels.map(r => r.requester_id === user.id ? r.addressee_id : r.requester_id);
 
-
-      // Layer 3: Use get_friend_profiles RPC (SECURITY DEFINER) instead of direct
-      // profiles table access. The direct query fails when the other user's profile
-      // visibility is not 'public', because RLS blocks it.
-      // The RPC bypasses visibility for connected users (pending OR accepted).
+      // Layer 3: Use get_friend_profiles RPC (SECURITY DEFINER)
       const { data: profiles, error: profileError } = await supabase.rpc('get_friend_profiles', {
         user_ids: otherUserIds
       });
 
-
-
-      // If the RPC doesn't exist yet, fall back to direct query (less reliable)
+      // If the RPC doesn't exist yet or errors, fall back to direct query (joining user_stats)
       let resolvedProfiles = profiles;
       if (profileError) {
         console.warn('[FRIENDS] get_friend_profiles RPC failed, falling back to direct query:', profileError.message);
-        const { data: fallbackProfiles } = await supabase
-          .from('profiles')
-          .select('id, username, display_name, full_name, avatar_url, bio')
-          .in('id', otherUserIds);
-        resolvedProfiles = fallbackProfiles;
-      }
+        const [fallbackProfilesRes, fallbackStatsRes] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, username, display_name, full_name, avatar_url, bio')
+            .in('id', otherUserIds),
+          supabase
+            .from('user_stats')
+            .select('user_id, current_streak')
+            .in('user_id', otherUserIds)
+        ]);
 
+        const statsMap = new Map((fallbackStatsRes.data || []).map(s => [s.user_id, s.current_streak]));
+        resolvedProfiles = (fallbackProfilesRes.data || []).map((p: any) => ({
+          ...p,
+          current_streak: statsMap.get(p.id) || 0
+        }));
+      }
 
       const combined: Friendship[] = [];
 
@@ -111,7 +149,6 @@ export function FriendsPage() {
       }
 
       setFriendships(combined);
-      setMyStreak(profile?.current_streak || 0);
 
     } catch (err: any) {
       console.error('[FRIENDS] Fatal error:', err);
@@ -124,24 +161,25 @@ export function FriendsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, profile?.current_streak]);
 
   useEffect(() => {
     fetchFriendships();
 
     if (!user) return;
 
-    // Realtime: decorative enhancement, never blocks initial load
+    // Realtime updates for friendship changes and user stats updates
     const channel = supabase
       .channel(`friendships_changes_${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `requester_id=eq.${user.id}` }, () => fetchFriendships())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `addressee_id=eq.${user.id}` }, () => fetchFriendships())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_stats' }, () => fetchFriendships())
       .subscribe((_status, err) => {
         if (err) console.warn('[FRIENDS] Realtime error (non-fatal):', err);
       });
 
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, fetchFriendships]);
 
   useEffect(() => {
     async function performSearch() {
@@ -193,39 +231,81 @@ export function FriendsPage() {
   const handleAddFriend = async (targetUserId: string) => {
     if (!user) return;
 
-    const { error } = await supabase
-      .from('friendships')
-      .insert({ requester_id: user.id, addressee_id: targetUserId, status: 'pending' })
-      .select()
-      .single();
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .insert({ requester_id: user.id, addressee_id: targetUserId, status: 'pending' });
 
-    if (error) {
-      console.error('[FRIENDS] Add Friend Error:', error);
-    } else {
+      if (error) {
+        // If row was previously declined/cancelled, attempt re-request
+        const { error: updateError } = await supabase
+          .from('friendships')
+          .update({ status: 'pending', updated_at: new Date().toISOString() })
+          .or(`and(requester_id.eq.${user.id},addressee_id.eq.${targetUserId}),and(requester_id.eq.${targetUserId},addressee_id.eq.${user.id})`);
+
+        if (updateError) throw error;
+      }
+      toast.success('Friend request sent');
       fetchFriendships();
+    } catch (err: any) {
+      console.error('[FRIENDS] Add Friend Error:', err);
+      toast.error('Could not send friend request');
     }
   };
 
   const handleAccept = async (friendshipId: string) => {
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .eq('id', friendshipId);
 
-    const { error } = await supabase
-      .from('friendships')
-      .update({ status: 'accepted', updated_at: new Date().toISOString() })
-      .eq('id', friendshipId)
-      .select()
-      .single();
-
-    if (error) console.error('[FRIENDS] Accept Error:', error);
-    else fetchFriendships();
+      if (error) throw error;
+      toast.success('Friend request accepted');
+      fetchFriendships();
+    } catch (err: any) {
+      console.error('[FRIENDS] Accept Error:', err);
+      toast.error('Failed to accept friend request');
+    }
   };
 
   const handleDecline = async (friendshipId: string) => {
-    const { error } = await supabase
-      .from('friendships')
-      .update({ status: 'declined', updated_at: new Date().toISOString() })
-      .eq('id', friendshipId);
-    if (error) console.error('[FRIENDS] Decline Error:', error);
-    else fetchFriendships();
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .update({ status: 'declined', updated_at: new Date().toISOString() })
+        .eq('id', friendshipId);
+
+      if (error) throw error;
+      toast.success('Friend request declined');
+      fetchFriendships();
+    } catch (err: any) {
+      console.error('[FRIENDS] Decline Error:', err);
+      toast.error('Failed to decline friend request');
+    }
+  };
+
+  const handleCancel = async (friendshipId: string) => {
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', friendshipId);
+
+      if (error) {
+        // Fallback delete if update policy differs
+        const { error: delError } = await supabase
+          .from('friendships')
+          .delete()
+          .eq('id', friendshipId);
+        if (delError) throw delError;
+      }
+      toast.success('Friend request cancelled');
+      fetchFriendships();
+    } catch (err: any) {
+      console.error('[FRIENDS] Cancel Error:', err);
+      toast.error('Failed to cancel friend request');
+    }
   };
 
   // Determine relationship state for a given user ID
@@ -437,9 +517,9 @@ export function FriendsPage() {
             {outgoingRequests.map(req => {
               const displayName = req.profiles.display_name || req.profiles.full_name;
               return (
-                <div key={req.id} className="flex items-center justify-between p-4 border border-border/20 rounded-xl opacity-70">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-border/20 overflow-hidden flex items-center justify-center shrink-0 grayscale">
+                <div key={req.id} className="flex items-center justify-between p-4 border border-border/20 rounded-xl">
+                  <Link to={`/u/${req.profiles.username}`} className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-border/20 overflow-hidden flex items-center justify-center shrink-0">
                       {req.profiles.avatar_url
                         ? <img src={req.profiles.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
                         : <span className="text-xs font-bold text-textMuted">{displayName?.substring(0, 2).toUpperCase()}</span>}
@@ -448,8 +528,16 @@ export function FriendsPage() {
                       <span className="text-sm font-bold text-textMain tracking-tight">{displayName}</span>
                       <span className="text-[10px] text-textMuted font-medium tracking-widest uppercase">@{req.profiles.username}</span>
                     </div>
+                  </Link>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold tracking-widest text-textMuted uppercase hidden sm:inline">REQUEST SENT</span>
+                    <button
+                      onClick={() => handleCancel(req.id)}
+                      className="px-3 py-1.5 border border-red-500/30 hover:border-red-500/60 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-bold tracking-widest uppercase rounded-full transition-colors flex items-center gap-1.5"
+                    >
+                      <X size={12} /> CANCEL
+                    </button>
                   </div>
-                  <span className="text-[10px] font-bold tracking-widest text-textMuted uppercase pr-2">REQUEST SENT</span>
                 </div>
               );
             })}

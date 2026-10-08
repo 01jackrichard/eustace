@@ -21,7 +21,7 @@ export function Login() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin
+        redirectTo: `${window.location.origin}/auth/callback`
       }
     });
     if (error) {
@@ -43,13 +43,34 @@ export function Login() {
     setLoading(false);
   };
 
+  const isUnconfirmedEmail = error.toLowerCase().includes('email not confirmed');
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background animate-fade-in">
       <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-8 shadow-2xl">
         <h1 className="text-2xl font-bold tracking-tight text-textMain mb-2 text-center">Welcome back</h1>
         <p className="text-textMuted text-sm text-center mb-8">Sign in to your Eustace workspace</p>
 
-        {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-lg mb-6">{error}</div>}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-4 rounded-xl mb-6">
+            <p className="font-semibold">{error}</p>
+            {isUnconfirmedEmail && (
+              <div className="mt-3 pt-3 border-t border-red-500/20 flex flex-col gap-2">
+                <p className="text-xs text-textMuted">
+                  Please check your Gmail or email inbox for your activation link before signing in.
+                </p>
+                <a
+                  href="https://mail.google.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold rounded-lg transition-colors w-fit"
+                >
+                  Open Gmail
+                </a>
+              </div>
+            )}
+          </div>
+        )}
 
         <button 
           onClick={handleGoogleLogin} 
