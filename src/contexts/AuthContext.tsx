@@ -60,11 +60,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (!error && data) {
-      setProfile(data as Profile);
+    try {
+      const [profileRes, statsRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('user_stats').select('current_streak').eq('user_id', userId).maybeSingle()
+      ]);
+
+      if (!profileRes.error && profileRes.data) {
+        setProfile({
+          ...profileRes.data,
+          current_streak: statsRes.data?.current_streak ?? 0
+        } as Profile);
+      }
+    } catch (err) {
+      console.warn('[AUTH] Error fetching user profile and stats:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const refreshProfile = async () => {

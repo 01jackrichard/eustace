@@ -30,6 +30,7 @@ function safeLazy<T extends ComponentType<any>>(importFn: () => Promise<{ defaul
 const Landing = safeLazy(() => import('./pages/Landing').then(m => ({ default: m.Landing })));
 const Login = safeLazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
 const Signup = safeLazy(() => import('./pages/Signup').then(m => ({ default: m.Signup })));
+const AuthCallback = safeLazy(() => import('./pages/AuthCallback').then(m => ({ default: m.AuthCallback })));
 const Dashboard = safeLazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const CalendarPage = safeLazy(() => import('./pages/CalendarPage').then(m => ({ default: m.CalendarPage })));
 const TasksPage = safeLazy(() => import('./pages/TasksPage').then(m => ({ default: m.TasksPage })));
@@ -62,7 +63,7 @@ function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/auth/callback" element={<Landing />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/privacy" element={<PrivacyPage />} />

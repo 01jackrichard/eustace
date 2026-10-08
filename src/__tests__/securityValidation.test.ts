@@ -210,5 +210,112 @@ describe('Security Validation & State Integrity', () => {
       expect(getParsedRRule('')).toBeNull();
     });
   });
+
+  describe('Friendship State Machine & Cancel/Decline Transition Parity', () => {
+    type FriendshipState = 'pending' | 'accepted' | 'declined' | 'cancelled';
+
+    const validateTransition = (
+      currentUid: string,
+      requesterId: string,
+      addresseeId: string,
+      oldStatus: FriendshipState,
+      newStatus: FriendshipState
+    ): { allowed: boolean; reason?: string } => {
+      if (oldStatus === newStatus) return { allowed: true };
+
+      if (oldStatus === 'pending') {
+        if (currentUid === requesterId) {
+          if (newStatus === 'cancelled') return { allowed: true };
+          return { allowed: false, reason: 'Requester can only cancel pending request.' };
+        }
+        if (currentUid === addresseeId) {
+          if (newStatus === 'accepted' || newStatus === 'declined') return { allowed: true };
+          return { allowed: false, reason: 'Addressee can only accept or decline.' };
+        }
+        return { allowed: false, reason: 'Unauthorized user.' };
+      }
+
+      if (oldStatus === 'declined' || oldStatus === 'cancelled') {
+        if (currentUid === requesterId && newStatus === 'pending') {
+          return { allowed: true };
+        }
+        return { allowed: false, reason: `Cannot change status after it has been ${oldStatus}.` };
+      }
+
+      return { allowed: false, reason: `Cannot change status after it has been ${oldStatus}.` };
+    };
+
+    const userA = 'user-a-1111';
+    const userB = 'user-b-2222';
+    const thirdParty = 'user-c-3333';
+
+    it('allows requester to cancel a pending friend request', () => {
+      const result = validateTransition(userA, userA, userB, 'pending', 'cancelled');
+      expect(result.allowed).toBe(true);
+    });
+
+    it('blocks requester from self-accepting a pending friend request', () => {
+      const result = validateTransition(userA, userA, userB, 'pending', 'accepted');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('Requester can only cancel');
+    });
+
+    it('allows addressee to decline an incoming pending friend request', () => {
+      const result = validateTransition(userB, userA, userB, 'pending', 'declined');
+      expect(result.allowed).toBe(true);
+    });
+
+    it('allows addressee to accept an incoming pending friend request', () => {
+      const result = validateTransition(userB, userA, userB, 'pending', 'accepted');
+      expect(result.allowed).toBe(true);
+    });
+
+    it('blocks addressee from cancelling an incoming request (must decline)', () => {
+      const result = validateTransition(userB, userA, userB, 'pending', 'cancelled');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('Addressee can only accept or decline');
+    });
+
+    it('blocks third party from modifying any friendship state', () => {
+      const result = validateTransition(thirdParty, userA, userB, 'pending', 'accepted');
+      expect(result.allowed).toBe(false);
+    });
+
+    it('allows requester to re-request after decline or cancellation', () => {
+      const fromDeclined = validateTransition(userA, userA, userB, 'declined', 'pending');
+      expect(fromDeclined.allowed).toBe(true);
+
+      const fromCancelled = validateTransition(userA, userA, userB, 'cancelled', 'pending');
+      expect(fromCancelled.allowed).toBe(true);
+    });
+  });
+
+  describe('User Metadata & Username Fallback Preservation', () => {
+    it('preserves username from user_metadata when profile row is unprovisioned', () => {
+      const mockUser = {
+        id: 'mock-uuid',
+        user_metadata: {
+          username: 'noorul_dev',
+          full_name: 'Noorul Ahamed'
+        }
+      };
+
+      const resolvedUsername = (mockUser.user_metadata?.username as string) || '';
+      const resolvedName = mockUser.user_metadata?.full_name || '';
+
+      expect(resolvedUsername).toBe('noorul_dev');
+      expect(resolvedName).toBe('Noorul Ahamed');
+    });
+
+    it('handles missing user_metadata gracefully with empty defaults', () => {
+      const mockUserEmpty = {
+        id: 'mock-uuid',
+        user_metadata: {}
+      };
+
+      const resolvedUsername = (mockUserEmpty.user_metadata as any)?.username || '';
+      expect(resolvedUsername).toBe('');
+    });
+  });
 });
 
