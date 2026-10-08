@@ -82,3 +82,23 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
+
+/* TipTap Placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+  color: #A0A0A0;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.tiptap {
+  outline: none;
+}
+.prose-orange :where(a):not(:where([class~="not-prose"] *)) {
+  color: #FF5722;
+  text-decoration: underline;
+}
+.prose-orange :where(strong):not(:where([class~="not-prose"] *)) {
+  color: #fff;
+}
+

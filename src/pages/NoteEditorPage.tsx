@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useNotesData, type Note } from '../hooks/useNotesData';
 import { supabase } from '../lib/supabase';
-import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { RichTextEditor } from '../components/RichTextEditor';
 import { ArrowLeft, Pin, MoreVertical, Folder, Trash2, Tag, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { ConfirmModal, MoveFolderModal, EditTagsModal } from '../components/NotesModals';
+import toast from 'react-hot-toast';
 
 export function NoteEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,16 +19,15 @@ export function NoteEditorPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+    const [saveState, setSaveState] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [showMenu, setShowMenu] = useState(false);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveGenerationRef = useRef(0);
   const latestTitleRef = useRef('');
   const latestContentRef = useRef('');
 
@@ -53,6 +53,7 @@ export function NoteEditorPage() {
 
       if (!active) return;
       if (error || !singleNote) {
+        toast.error('Note not found or deleted');
         navigate('/notes', { replace: true });
         return;
       }
@@ -68,26 +69,19 @@ export function NoteEditorPage() {
     fetchSingleNote();
     return () => { active = false; };
   }, [id, navigate]);
-
-  // Handle auto-resize of textarea
-  useEffect(() => {
-    if (isEditing && textareaRef.current) {
-      textareaRef.current.style.height = '0px';
-      const scrollHeight = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = scrollHeight + 'px';
-    }
-  }, [content, isEditing]);
-
   // Debounced Save
   const triggerSave = (newTitle: string, newContent: string) => {
     setSaveState('unsaved');
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    const currentGen = ++saveGenerationRef.current;
 
     saveTimeoutRef.current = setTimeout(async () => {
-      if (!id) return;
+      if (!id || currentGen !== saveGenerationRef.current) return;
       setSaveState('saving');
       const success = await updateNote(id, { title: newTitle.trim() || 'Untitled', content: newContent }, false);
-      setSaveState(success ? 'saved' : 'unsaved');
+      if (currentGen === saveGenerationRef.current) {
+        setSaveState(success ? 'saved' : 'unsaved');
+      }
     }, 1000);
   };
 
@@ -111,10 +105,13 @@ export function NoteEditorPage() {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        const currentGen = ++saveGenerationRef.current;
         if (id) {
           setSaveState('saving');
           updateNote(id, { title: latestTitleRef.current.trim() || 'Untitled', content: latestContentRef.current }, false).then(success => {
-            setSaveState(success ? 'saved' : 'unsaved');
+            if (currentGen === saveGenerationRef.current) {
+              setSaveState(success ? 'saved' : 'unsaved');
+            }
           });
         }
       }
@@ -129,15 +126,12 @@ export function NoteEditorPage() {
     triggerSave(newTitle, latestContentRef.current);
   };
 
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newContent = e.target.value;
-    setContent(newContent);
-    triggerSave(latestTitleRef.current, newContent);
-  };
-
+  
   const handleTogglePin = async () => {
     if (!note) return;
-    await updateNote(note.id, { is_pinned: !note.is_pinned });
+    const newPinned = !note.is_pinned;
+    setNote({ ...note, is_pinned: newPinned });
+    await updateNote(note.id, { is_pinned: newPinned });
   };
 
   const handleDelete = async () => {
@@ -146,34 +140,11 @@ export function NoteEditorPage() {
     navigate('/notes');
   };
 
-  const handleCheckboxToggle = (index: number, checked: boolean) => {
-    if (!note) return;
-
-    let currentIdx = 0;
-    const lines = content.split('\n');
-    const newLines = lines.map(line => {
-      if (line.trim().startsWith('- [ ] ') || line.trim().startsWith('- [x] ') || line.trim().startsWith('- [X] ')) {
-        if (currentIdx === index) {
-          const match = line.match(/^(\s*- \[)[ xX](\] .*)$/);
-          if (match) {
-            currentIdx++;
-            return `${match[1]}${checked ? 'x' : ' '}${match[2]}`;
-          }
-        }
-        currentIdx++;
-      }
-      return line;
-    });
-
-    const newContent = newLines.join('\n');
-    setContent(newContent);
-    triggerSave(title, newContent);
-  };
-
+  
   if (noteLoading || !note) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-textMuted">
-        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-textMuted flex-1 h-full">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
       </div>
     );
   }
@@ -186,19 +157,19 @@ export function NoteEditorPage() {
   );
 
   return (
-    <div className="animate-fade-in max-w-3xl mx-auto w-full pb-32 pt-4 md:pt-8 px-4 md:px-0" onClick={() => setShowMenu(false)}>
+    <div className="animate-fade-in w-full h-full flex flex-col px-4 md:px-8 lg:px-12 py-4 md:py-8 lg:py-10" onClick={() => setShowMenu(false)}>
 
       {/* Top Bar */}
-      <div className="flex items-center justify-between mb-12">
+      <div className="flex items-center justify-between mb-8 lg:mb-12 shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/notes')}
-            className="p-2 -ml-2 text-textMuted hover:text-textMain transition-colors rounded-lg hover:bg-surface/50"
+            className="p-2 -ml-2 text-textMuted hover:text-textMain transition-colors rounded-lg hover:bg-[#111111] lg:hidden"
           >
             <ArrowLeft size={18} />
           </button>
           <div className="flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase text-textMuted/70">
-            {saveState === 'saving' && <span className="text-accent animate-pulse">Saving...</span>}
+            {saveState === 'saving' && <span className="text-orange-500 animate-pulse">Saving...</span>}
             {saveState === 'saved' && <span>Saved</span>}
             {saveState === 'unsaved' && <span>Unsaved changes</span>}
           </div>
@@ -209,7 +180,7 @@ export function NoteEditorPage() {
             onClick={handleTogglePin}
             className={cn(
               "p-2 rounded-lg transition-colors",
-              note.is_pinned ? "text-accent bg-accent/10" : "text-textMuted hover:text-textMain hover:bg-surface/50"
+              note.is_pinned ? "text-orange-500 bg-orange-500/10" : "text-textMuted hover:text-textMain hover:bg-[#111111]"
             )}
             title={note.is_pinned ? "Unpin" : "Pin"}
           >
@@ -218,20 +189,20 @@ export function NoteEditorPage() {
 
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className="p-2 text-textMuted hover:text-textMain transition-colors rounded-lg hover:bg-surface/50"
+            className="p-2 text-textMuted hover:text-textMain transition-colors rounded-lg hover:bg-[#111111]"
           >
             <MoreVertical size={16} />
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-surface border border-border/40 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute right-0 top-full mt-2 w-48 bg-[#111111] border border-border/40 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
               <div className="px-3 py-2 text-[10px] font-bold tracking-widest uppercase text-textMuted/50 border-b border-border/30 mb-1">
                 Created {format(new Date(note.created_at), 'MMM d, yyyy')}
               </div>
-              <button onClick={() => setIsMoveModalOpen(true)} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-textMuted hover:text-textMain hover:bg-border/30 transition-colors">
+              <button onClick={() => setIsMoveModalOpen(true)} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-textMuted hover:text-textMain hover:bg-white/5 transition-colors">
                 <Folder size={14} /> Move Folder
               </button>
-              <button onClick={() => setIsTagsModalOpen(true)} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-textMuted hover:text-textMain hover:bg-border/30 transition-colors">
+              <button onClick={() => setIsTagsModalOpen(true)} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-textMuted hover:text-textMain hover:bg-white/5 transition-colors">
                 <Tag size={14} /> Edit Tags
               </button>
               <div className="h-px w-full bg-border/30 my-1" />
@@ -244,79 +215,46 @@ export function NoteEditorPage() {
       </div>
 
       {/* Editor Area */}
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 flex-1 pb-32 max-w-4xl">
         <textarea
           value={title}
           onChange={handleTitleChange}
           placeholder="Note Title"
           rows={1}
-          className="w-full bg-transparent text-4xl md:text-5xl font-bold tracking-tight text-textMain placeholder-textMuted/30 outline-none resize-none leading-[1.2]"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              if (!isEditing) setIsEditing(true);
-              setTimeout(() => textareaRef.current?.focus(), 50);
-            }
-          }}
-        />
+          className="w-full bg-transparent text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-textMain placeholder-textMuted/30 outline-none resize-none leading-tight"
+          />
 
-        {isEditing ? (
-          <div className="relative group">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleContentChange}
-              placeholder="Write freely..."
-              className="w-full min-h-[50vh] bg-transparent text-base md:text-lg leading-relaxed text-textMain placeholder-textMuted/30 outline-none resize-none overflow-hidden font-sans"
-              autoFocus
-              onBlur={() => setIsEditing(false)}
-            />
-            {/* Minimal shortcut hint */}
-            <div className="absolute -bottom-8 right-0 opacity-0 group-focus-within:opacity-100 transition-opacity text-[10px] font-bold tracking-widest text-textMuted/50 uppercase">
-              ESC to preview
+        <RichTextEditor 
+          content={content} 
+          onChange={(newContent) => {
+            setContent(newContent);
+            triggerSave(title, newContent);
+          }} 
+        />
+        
+        {/* Backlinks */}
+        {backlinks.length > 0 && (
+          <div className="mt-16 pt-8 border-t border-border/20 animate-in fade-in">
+            <h3 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-4">Linked From</h3>
+            <div className="flex flex-col gap-2">
+              {backlinks.map(b => (
+                <Link
+                  key={b.id}
+                  to={`/notes/${b.id}`}
+                  className="group flex items-center justify-between p-3 rounded-xl bg-[#111111]/50 hover:bg-[#111111] border border-transparent hover:border-border/40 transition-colors"
+                >
+                  <span className="text-sm font-medium text-textMain group-hover:text-orange-500 transition-colors truncate">
+                    {b.title}
+                  </span>
+                  <span className="text-xs text-textMuted/50">
+                    {format(new Date(b.updated_at), 'MMM d')}
+                  </span>
+                </Link>
+              ))}
             </div>
-          </div>
-        ) : (
-          <div
-            className="min-h-[50vh] cursor-text"
-            onClick={() => setIsEditing(true)}
-          >
-            {!content.trim() ? (
-              <span className="text-textMuted/30 text-lg">Write freely...</span>
-            ) : (
-              <MarkdownRenderer
-                content={content}
-                notesList={notes.map(n => ({ id: n.id, title: n.title }))}
-                onCheckboxToggle={handleCheckboxToggle}
-                className="text-lg"
-              />
-            )}
           </div>
         )}
       </div>
-
-      {/* Backlinks */}
-      {backlinks.length > 0 && (
-        <div className="mt-24 pt-8 border-t border-border/20 animate-in fade-in">
-          <h3 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-4">Linked From</h3>
-          <div className="flex flex-col gap-2">
-            {backlinks.map(b => (
-              <Link
-                key={b.id}
-                to={`/notes/${b.id}`}
-                className="group flex items-center justify-between p-3 rounded-lg bg-surface/30 hover:bg-surface border border-transparent hover:border-border/40 transition-colors"
-              >
-                <span className="text-sm font-medium text-textMain group-hover:text-accent transition-colors truncate">
-                  {b.title}
-                </span>
-                <span className="text-xs text-textMuted/50">
-                  {format(new Date(b.updated_at), 'MMM d')}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Modals */}
       <ConfirmModal
@@ -331,7 +269,11 @@ export function NoteEditorPage() {
       <MoveFolderModal
         isOpen={isMoveModalOpen}
         onClose={() => setIsMoveModalOpen(false)}
-        onMove={async (folderId) => { await updateNote(note.id, { folder_id: folderId }); }}
+        onMove={async (folderId) => { 
+          if (!note) return;
+          setNote({ ...note, folder_id: folderId });
+          await updateNote(note.id, { folder_id: folderId }); 
+        }}
         folders={folders}
         currentFolderId={note.folder_id}
       />
@@ -339,7 +281,11 @@ export function NoteEditorPage() {
       <EditTagsModal
         isOpen={isTagsModalOpen}
         onClose={() => setIsTagsModalOpen(false)}
-        onSave={async (tags) => { await updateNote(note.id, { tags }); }}
+        onSave={async (tags) => { 
+          if (!note) return;
+          setNote({ ...note, tags });
+          await updateNote(note.id, { tags }); 
+        }}
         initialTags={note.tags || []}
       />
 

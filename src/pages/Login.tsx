@@ -18,6 +18,13 @@ export function Login() {
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setError('');
+
+    if (import.meta.env.VITE_SUPABASE_URL === undefined || import.meta.env.VITE_SUPABASE_URL.trim() === '') {
+      setError('Configuration Error: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing in your .env.local file. Please add your real Supabase credentials to log in.');
+      setGoogleLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -25,7 +32,11 @@ export function Login() {
       }
     });
     if (error) {
-      setError(error.message);
+      if (error.message === 'Failed to fetch') {
+        setError('Network Error: Failed to fetch. Please verify your VITE_SUPABASE_URL in .env.local is correct.');
+      } else {
+        setError(error.message);
+      }
       setGoogleLoading(false);
     }
   };
@@ -35,9 +46,22 @@ export function Login() {
     setLoading(true);
     setError('');
 
+    // Handle missing configuration gracefully
+    if (import.meta.env.VITE_SUPABASE_URL === undefined || import.meta.env.VITE_SUPABASE_URL.trim() === '') {
+      setError('Configuration Error: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are missing in your .env.local file. Please add your real Supabase credentials to log in.');
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) setError(error.message);
+    if (error) {
+      if (error.message === 'Failed to fetch') {
+        setError('Network Error: Failed to fetch. Please verify your VITE_SUPABASE_URL in .env.local is correct and your internet connection is active.');
+      } else {
+        setError(error.message);
+      }
+    }
     else navigate('/dashboard');
 
     setLoading(false);

@@ -45,6 +45,7 @@ export function useNotesData() {
       setNotes(notesRes.data || []);
       setFolders(foldersRes.data || []);
     } catch (err: any) {
+      console.error('[useNotesData] Failed to load notes:', err);
       toast.error('Failed to load notes');
     } finally {
       setLoading(false);
@@ -109,7 +110,7 @@ export function useNotesData() {
     return data as Note;
   };
 
-  const updateNote = async (id: string, updates: Partial<Note>, showToast = true) => {
+  const updateNote = useCallback(async (id: string, updates: Partial<Note>, showToast = true) => {
     if (!user) return;
 
     // Optimistic update
@@ -126,7 +127,7 @@ export function useNotesData() {
       return false;
     }
     return true;
-  };
+  }, [user, fetchNotes]);
 
   const deleteNote = async (id: string) => {
     if (!user) return;
