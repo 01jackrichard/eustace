@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStats, getDayCompletionInfo, getTasksForDate } from '../lib/dataManager';
+import { calculateStats, getDayCompletionInfo, getTasksForDate, calculateStreakFromDates, calculateLongestStreakFromDates } from '../lib/dataManager';
 import type { AppData } from '../lib/dataManager';
+import { format, subDays, startOfDay } from 'date-fns';
 
 describe('DataManager Productivity & Stats Logic', () => {
   const mockData: AppData = {
@@ -81,5 +82,41 @@ describe('DataManager Productivity & Stats Logic', () => {
     expect(stats.currentStreak).toBe(0);
     expect(stats.longestStreak).toBe(0);
     expect(stats.completedDays).toBe(0);
+  });
+
+  it('calculates active streak when completed today', () => {
+    const today = startOfDay(new Date());
+    const d0 = format(today, 'yyyy-MM-dd');
+    const d1 = format(subDays(today, 1), 'yyyy-MM-dd');
+    const d2 = format(subDays(today, 2), 'yyyy-MM-dd');
+
+    const streak = calculateStreakFromDates([d0, d1, d2]);
+    expect(streak).toBe(3);
+  });
+
+  it('preserves active streak when completed yesterday and today is still in progress', () => {
+    const today = startOfDay(new Date());
+    const d1 = format(subDays(today, 1), 'yyyy-MM-dd');
+    const d2 = format(subDays(today, 2), 'yyyy-MM-dd');
+
+    const streak = calculateStreakFromDates([d1, d2]);
+    expect(streak).toBe(2);
+  });
+
+  it('returns 0 when last completion was before yesterday', () => {
+    const today = startOfDay(new Date());
+    const d2 = format(subDays(today, 2), 'yyyy-MM-dd');
+    const d3 = format(subDays(today, 3), 'yyyy-MM-dd');
+
+    const streak = calculateStreakFromDates([d2, d3]);
+    expect(streak).toBe(0);
+  });
+
+  it('calculates longest streak correctly across disconnected segments', () => {
+    const longest = calculateLongestStreakFromDates([
+      '2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04',
+      '2026-02-01', '2026-02-02'
+    ]);
+    expect(longest).toBe(4);
   });
 });
