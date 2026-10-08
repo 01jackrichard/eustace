@@ -20,7 +20,10 @@ export function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 w-64 bg-background border-r border-border/60 hidden md:flex flex-col z-40">
       <div className="p-6 pb-4">
-        <h1 className="text-sm font-bold tracking-widest text-textMain uppercase">EUSTACE</h1>
+        <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="Eustace Logo" className="h-6 w-6 object-contain" />
+          <h1 className="text-sm font-bold tracking-widest text-textMain uppercase">EUSTACE</h1>
+        </div>
       </div>
 
       <nav className="flex-1 px-4 flex flex-col gap-0.5 overflow-y-auto mt-4">

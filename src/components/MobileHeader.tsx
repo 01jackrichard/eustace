@@ -7,7 +7,10 @@ export function MobileHeader() {
   
   return (
     <div className="md:hidden fixed top-0 inset-x-0 bg-[#050505]/95 backdrop-blur-xl border-b border-border/60 z-50 px-5 flex items-center justify-between pt-[env(safe-area-inset-top)] h-[calc(56px+env(safe-area-inset-top))]">
-      <Link to="/dashboard" className="text-xs font-bold tracking-widest text-textMain uppercase">EUSTACE</Link>
+      <Link to="/dashboard" className="flex items-center gap-2">
+        <img src="/logo.png" alt="Eustace Logo" className="h-5 w-5 object-contain" />
+        <span className="text-xs font-bold tracking-widest text-textMain uppercase">EUSTACE</span>
+      </Link>
       
       <div className="flex items-center gap-5">
         <Link to="/friends" aria-label="Friends" className="text-textMuted hover:text-textMain transition-colors">

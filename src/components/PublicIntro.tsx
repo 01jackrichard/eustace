@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 
 const INITIAL = "EUSTACE";
-const TARGET = "MAKE YOURSELF WORTHY.";
+const TARGET = "PLAN YOUR DAY.";
 const GLYPHS = ['E', 'X', 'I', 'U', '/', 'S', '5', 'T', '+', 'A', '^', 'C', '[', ']', '?', 'E'];
 
 interface PublicIntroProps {
@@ -47,8 +47,9 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
       // Measure new positions (React just rendered them)
       const newRects = newSpans.map(s => s.getBoundingClientRect());
 
-      // Invert
-      const mapping = [0, 3, 7, 10, 14, 17, 20];
+      // Invert - mapping 7 EUSTACE chars to indices in "PLAN YOUR DAY."
+      // P(0) L(1) A(2) N(3) ' '(4) Y(5) O(6) U(7) R(8) ' '(9) D(10) A(11) Y(12) .(13)
+      const mapping = [0, 1, 2, 3, 5, 7, 10];
 
       newSpans.forEach((span, i) => {
         const oldIndex = mapping.indexOf(i);
@@ -135,7 +136,7 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
           ref={containerRef}
           className={cn(
             "text-white mix-blend-plus-lighter text-center max-w-[95vw] leading-[1.2]",
-            phase === 'initial' ? "text-[clamp(60px,8vw,120px)]" : "text-[clamp(28px,5vw,72px)]"
+            phase === 'initial' ? "text-[clamp(60px,8vw,120px)]" : "text-[clamp(40px,6vw,90px)]"
           )}
           style={{
             fontFamily: "'Syncopate', sans-serif",
@@ -150,19 +151,11 @@ export function PublicIntro({ onComplete }: PublicIntroProps) {
               ))}
             </span>
           ) : (
-            <>
-              <span className="inline-block whitespace-nowrap">
-                {TARGET.substring(0, 14).split('').map((char, i) => (
-                  <span key={i} className="char inline-block transform-gpu" style={char === ' ' ? { width: '0.4em' } : {}}>{char}</span>
-                ))}
-              </span>
-              <wbr />
-              <span className="inline-block whitespace-nowrap">
-                {TARGET.substring(14).split('').map((char, i) => (
-                  <span key={i + 14} className="char inline-block transform-gpu" style={char === ' ' ? { width: '0.4em' } : {}}>{char}</span>
-                ))}
-              </span>
-            </>
+            <span className="inline-block whitespace-nowrap">
+              {TARGET.split('').map((char, i) => (
+                <span key={i} className="char inline-block transform-gpu" style={char === ' ' ? { width: '0.4em' } : {}}>{char}</span>
+              ))}
+            </span>
           )}
         </h1>
       </div>

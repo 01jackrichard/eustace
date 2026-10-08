@@ -9,6 +9,8 @@ export type TaskMetadata = {
   rrule?: string;
   startDate?: string;
   endDate?: string;
+  startTime?: string; // HH:mm format
+  endTime?: string; // HH:mm format
 };
 
 export type Task = {
