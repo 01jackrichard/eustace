@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNotesData } from '../hooks/useNotesData';
 import { formatDistanceToNow } from 'date-fns';
-import { Search, Plus, Folder, Pin, FileText, Trash2, Edit2, Archive, Loader2 } from 'lucide-react';
+import { Search, Plus, Folder, Pin, FileText, Trash2, Edit2, Archive, Loader2, ChevronDown } from 'lucide-react';
 import { Link, useNavigate, Outlet, useParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { FolderModal, ConfirmModal } from '../components/NotesModals';
@@ -16,18 +16,27 @@ export function NotesPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string | 'all' | 'pinned' | 'unfiled'>('all');
+  const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
+  const viewDropdownRef = useRef<HTMLDivElement>(null);
 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<NoteFolder | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<NoteFolder | null>(null);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (viewDropdownRef.current && !viewDropdownRef.current.contains(event.target as Node)) {
+        setIsViewDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleNewNoteRef = useRef<() => void>(() => {});
-  handleNewNoteRef.current = () => {
-    const folderId = selectedFolderId !== 'all' && selectedFolderId !== 'pinned' && selectedFolderId !== 'unfiled' ? selectedFolderId : null;
-    createNote(folderId).then(note => {
-      if (note) navigate(`/notes/${note.id}`);
-    });
-  };
+  useEffect(() => { handleNewNoteRef.current = () => { createNote(selectedFolderId !== 'all' && selectedFolderId !== 'pinned' && selectedFolderId !== 'unfiled' ? selectedFolderId : null).then(newNote => { if (newNote) navigate(`/notes/${newNote.id}`); }); }; });
+
+  const handleNewNote = () => handleNewNoteRef.current();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -46,162 +55,122 @@ export function NotesPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
-  const filteredNotes = notes.filter(n => {
-    // Folders / Pinned / Unfiled
-    if (selectedFolderId === 'pinned' && !n.is_pinned) return false;
-    if (selectedFolderId === 'unfiled' && n.folder_id !== null) return false;
-    if (selectedFolderId !== 'all' && selectedFolderId !== 'pinned' && selectedFolderId !== 'unfiled' && n.folder_id !== selectedFolderId) return false;
+  const filteredNotes = notes.filter(note => {
+    const searchLower = debouncedSearch.toLowerCase();
+    const matchesSearch = note.title?.toLowerCase().includes(searchLower) || 
+                          note.content?.toLowerCase().includes(searchLower) ||
+                          note.tags?.some(tag => tag.toLowerCase().includes(searchLower));
+    if (!matchesSearch) return false;
 
-    // Search
-    if (debouncedSearch) {
-      const q = debouncedSearch.toLowerCase();
-      const title = (n.title || '').toLowerCase();
-      const content = (n.content || '').toLowerCase();
-      const tags = n.tags || [];
-      
-      if (!title.includes(q) && !content.includes(q) && !tags.some(t => t.toLowerCase().includes(q))) {
-        return false;
-      }
-    }
-
+    if (selectedFolderId === 'pinned') return note.is_pinned;
+    if (selectedFolderId === 'unfiled') return !note.folder_id;
+    if (selectedFolderId !== 'all') return note.folder_id === selectedFolderId;
     return true;
   });
-
-  const handleNewNote = async () => {
-    const note = await createNote(selectedFolderId !== 'all' && selectedFolderId !== 'pinned' && selectedFolderId !== 'unfiled' ? selectedFolderId : null);
-    if (note) {
-      navigate(`/notes/${note.id}`);
-    }
-  };
-
-  const handleNewFolder = () => {
-    setEditingFolder(null);
-    setIsFolderModalOpen(true);
-  };
 
   const submitFolder = async (name: string) => {
     if (editingFolder) {
       await updateFolder(editingFolder.id, name);
+      setEditingFolder(null);
     } else {
       await createFolder(name);
     }
+    setIsFolderModalOpen(false);
   };
 
   const confirmDeleteFolder = async () => {
     if (deletingFolder) {
       await deleteFolder(deletingFolder.id);
       if (selectedFolderId === deletingFolder.id) setSelectedFolderId('all');
+      setDeletingFolder(null);
     }
   };
 
-  if (loading) {
+  if (loading && notes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-textMuted gap-4">
+      <div className="flex-1 flex items-center justify-center bg-[#050505]">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
       </div>
     );
   }
 
+  const getDropdownLabel = () => {
+    if (selectedFolderId === 'all') return 'All Notes';
+    if (selectedFolderId === 'pinned') return 'Pinned';
+    if (selectedFolderId === 'unfiled') return 'Unfiled';
+    const folder = folders.find(f => f.id === selectedFolderId);
+    return folder ? folder.name : 'All Notes';
+  };
+
+  const getDropdownIcon = () => {
+    if (selectedFolderId === 'all') return <FileText size={16} />;
+    if (selectedFolderId === 'pinned') return <Pin size={16} />;
+    if (selectedFolderId === 'unfiled') return <Archive size={16} />;
+    return <Folder size={16} />;
+  };
+
   return (
-    <div className="flex flex-col lg:flex-row w-full h-[calc(100dvh-4rem)] lg:h-[calc(100dvh-5rem)] overflow-hidden bg-[#050505] text-textMain">
-      
-      {/* Column 1: Folders / Filters Sidebar */}
-      <div className={cn(
-        "w-full lg:w-64 shrink-0 flex-col border-r border-border/40 bg-[#0A0A0A] overflow-y-auto hidden-scrollbar",
-        id ? "hidden lg:flex" : "flex flex-col h-1/2 lg:h-full border-b lg:border-b-0"
-      )}>
-        <div className="p-4 flex flex-col gap-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold tracking-widest text-textMuted uppercase">Notes Workspace</h2>
-          </div>
-
-          <nav className="flex flex-col gap-1">
-            <button
-              onClick={() => setSelectedFolderId('all')}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 text-left",
-                selectedFolderId === 'all' ? "bg-[#111111] text-textMain border border-border/40 shadow-sm" : "text-textMuted hover:text-textMain hover:bg-[#111111]/50 border border-transparent"
-              )}
-            >
-              <FileText size={16} className={selectedFolderId === 'all' ? "text-orange-500" : ""} /> All Notes
-            </button>
-
-            <button
-              onClick={() => setSelectedFolderId('pinned')}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 text-left",
-                selectedFolderId === 'pinned' ? "bg-[#111111] text-textMain border border-border/40 shadow-sm" : "text-textMuted hover:text-textMain hover:bg-[#111111]/50 border border-transparent"
-              )}
-            >
-              <Pin size={16} className={selectedFolderId === 'pinned' ? "text-orange-500" : ""} /> Pinned
-            </button>
-
-            <button
-              onClick={() => setSelectedFolderId('unfiled')}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 text-left",
-                selectedFolderId === 'unfiled' ? "bg-[#111111] text-textMain border border-border/40 shadow-sm" : "text-textMuted hover:text-textMain hover:bg-[#111111]/50 border border-transparent"
-              )}
-            >
-              <Archive size={16} className={selectedFolderId === 'unfiled' ? "text-orange-500" : ""} /> Unfiled
-            </button>
-          </nav>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="text-[10px] font-bold tracking-widest text-textMuted uppercase">Folders</h3>
-              <button onClick={handleNewFolder} className="text-textMuted hover:text-orange-500 transition-colors">
-                <Plus size={14} />
-              </button>
-            </div>
-            <div className="flex flex-col gap-1">
-              {folders.length === 0 ? (
-                <span className="text-xs text-textMuted/50 px-1 py-1">No folders yet.</span>
-              ) : (
-                folders.map(f => (
-                  <div key={f.id} className="group flex items-center relative">
-                    <button
-                      onClick={() => setSelectedFolderId(f.id)}
-                      className={cn(
-                        "flex-1 flex items-center gap-3 px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 text-left truncate pr-16",
-                        selectedFolderId === f.id ? "bg-[#111111] text-textMain border border-border/40 shadow-sm" : "text-textMuted hover:text-textMain hover:bg-[#111111]/50 border border-transparent"
-                      )}
-                    >
-                      <Folder size={14} className={cn("shrink-0 opacity-70", selectedFolderId === f.id ? "text-orange-500 opacity-100" : "")} />
-                      <span className="truncate">{f.name}</span>
-                    </button>
-                    {selectedFolderId === f.id && (
-                      <div className="absolute right-1 flex items-center bg-[#111111] shadow-sm border border-border/50 rounded p-0.5">
-                        <button
-                          onClick={() => { setEditingFolder(f); setIsFolderModalOpen(true); }}
-                          className="p-1 text-textMuted hover:text-textMain hover:bg-white/5 rounded"
-                        >
-                          <Edit2 size={12} />
-                        </button>
-                        <button
-                          onClick={() => setDeletingFolder(f)}
-                          className="p-1 text-red-500 hover:bg-red-500/10 rounded"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Column 2: Notes List */}
+    <div className="flex flex-1 h-[calc(100vh-6rem)] md:h-[calc(100vh-2rem)] overflow-hidden bg-[#050505] rounded-3xl border border-border/40 shadow-2xl">
+      {/* Unified Column: View Switcher & Notes List */}
       <div className={cn(
         "w-full lg:w-80 shrink-0 flex-col border-r border-border/40 bg-[#050505] overflow-y-auto hidden-scrollbar relative",
         id ? "hidden lg:flex" : "flex flex-col h-1/2 lg:h-full"
       )}>
         <div className="p-4 border-b border-border/40 bg-[#050505]/95 backdrop-blur z-10 sticky top-0 flex flex-col gap-3">
+          
+          {/* Header View Switcher */}
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold tracking-widest text-textMuted uppercase">List</h2>
+            <div className="relative" ref={viewDropdownRef}>
+              <button
+                onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-[#111111] hover:bg-[#1a1a1a] border border-border/40 rounded-xl transition-all"
+              >
+                <span className="text-orange-500">{getDropdownIcon()}</span>
+                <span className="text-sm font-bold tracking-wide text-textMain">{getDropdownLabel()}</span>
+                <ChevronDown size={14} className="text-textMuted ml-1" />
+              </button>
+
+              {isViewDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-56 bg-[#111111] border border-border/40 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col">
+                  <div className="p-2 flex flex-col gap-1">
+                    <button onClick={() => { setSelectedFolderId('all'); setIsViewDropdownOpen(false); }} className={cn("flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-colors", selectedFolderId === 'all' ? "bg-white/5 text-textMain" : "text-textMuted hover:text-textMain hover:bg-white/5")}>
+                      <FileText size={14} /> All Notes
+                    </button>
+                    <button onClick={() => { setSelectedFolderId('pinned'); setIsViewDropdownOpen(false); }} className={cn("flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-colors", selectedFolderId === 'pinned' ? "bg-white/5 text-textMain" : "text-textMuted hover:text-textMain hover:bg-white/5")}>
+                      <Pin size={14} /> Pinned
+                    </button>
+                    <button onClick={() => { setSelectedFolderId('unfiled'); setIsViewDropdownOpen(false); }} className={cn("flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-colors", selectedFolderId === 'unfiled' ? "bg-white/5 text-textMain" : "text-textMuted hover:text-textMain hover:bg-white/5")}>
+                      <Archive size={14} /> Unfiled
+                    </button>
+                  </div>
+                  
+                  <div className="border-t border-border/30 p-2 flex flex-col gap-1">
+                    <div className="flex items-center justify-between px-3 py-1 mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-textMuted">Folders</span>
+                      <button onClick={() => { setEditingFolder(null); setIsFolderModalOpen(true); setIsViewDropdownOpen(false); }} className="text-textMuted hover:text-orange-500 transition-colors">
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                    {folders.map(f => (
+                      <div key={f.id} className="group flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors hover:bg-white/5">
+                        <button 
+                          onClick={() => { setSelectedFolderId(f.id); setIsViewDropdownOpen(false); }}
+                          className={cn("flex items-center gap-3 flex-1 text-left truncate", selectedFolderId === f.id ? "text-textMain" : "text-textMuted hover:text-textMain")}
+                        >
+                          <Folder size={14} className={selectedFolderId === f.id ? "text-orange-500" : ""} />
+                          <span className="truncate">{f.name}</span>
+                        </button>
+                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
+                           <button onClick={(e) => { e.stopPropagation(); setEditingFolder(f); setIsFolderModalOpen(true); setIsViewDropdownOpen(false); }} className="p-1 text-textMuted hover:text-textMain hover:bg-white/10 rounded"><Edit2 size={12}/></button>
+                           <button onClick={(e) => { e.stopPropagation(); setDeletingFolder(f); setIsViewDropdownOpen(false); }} className="p-1 text-red-500 hover:bg-red-500/10 rounded"><Trash2 size={12}/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleNewNote}
               className="p-1.5 bg-orange-500/10 text-orange-500 hover:bg-orange-500 hover:text-white rounded-lg transition-colors"
@@ -210,7 +179,8 @@ export function NotesPage() {
               <Plus size={16} />
             </button>
           </div>
-          <div className="relative">
+          
+          <div className="relative mt-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
             <input
               ref={searchInputRef}
@@ -255,7 +225,7 @@ export function NotesPage() {
                     
                     {note.content && (
                       <p className="text-xs text-textMuted line-clamp-2 mb-3 pl-1 leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">
-                        {note.content.replace(/#|\*|\[|\]|`|-|>|_/g, '').trim()}
+                        {note.content.replace(/<[^>]*>?/gm, '').trim()}
                       </p>
                     )}
 
@@ -271,7 +241,7 @@ export function NotesPage() {
         </div>
       </div>
 
-      {/* Column 3: Note Editor Outlet */}
+      {/* Editor Outlet */}
       <div className={cn(
         "flex-1 flex-col bg-[#050505] overflow-y-auto relative hidden-scrollbar",
         !id ? "hidden lg:flex" : "flex"

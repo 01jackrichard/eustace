@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { PWAReloadPrompt } from './components/PWAReloadPrompt';
 import { InstallPrompt } from './components/InstallPrompt';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useGlobalShortcuts } from './hooks/useGlobalShortcuts';
 import { Loader2 } from 'lucide-react';
 
 function safeLazy<T extends ComponentType<any>>(importFn: () => Promise<{ default: T }>) {
@@ -53,6 +54,7 @@ function RouteFallback() {
 }
 
 function App() {
+  useGlobalShortcuts();
   return (
     <ErrorBoundary>
       <Toaster position="bottom-center" toastOptions={{

@@ -19,8 +19,10 @@
     "@tiptap/starter-kit": "^3.31.4",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
+    "dialkit": "^2.0.2",
     "framer-motion": "^14.0.0",
     "lucide-react": "^1.50.0",
+    "motion": "^14.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hot-toast": "^2.6.1",
@@ -29,7 +31,7 @@
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "^24.19.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",

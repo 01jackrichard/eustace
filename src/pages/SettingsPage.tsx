@@ -168,7 +168,8 @@ export function SettingsPage() {
       title: 'ACCOUNT',
       items: [
         { id: 'profile', label: 'Profile' },
-        { id: 'security', label: 'Security' }
+        { id: 'security', label: 'Security' },
+          { id: 'shortcuts', label: 'Shortcuts' }
       ]
     }
   ];
@@ -489,6 +490,68 @@ export function SettingsPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'shortcuts' && (
+            <div className="animate-fade-in">
+              <h2 className="text-xl font-bold text-textMain mb-2">Keyboard Shortcuts</h2>
+              <p className="text-sm text-textMuted mb-10">Work faster with these hotkeys.</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+                
+                {/* Application Shortcuts */}
+                <div>
+                  <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted mb-4 border-b border-border/20 pb-2">Application</h3>
+                  <div className="flex flex-col gap-4">
+                    {[
+                      { label: 'Quick Switcher', keys: ['Ctrl/Cmd', 'O'] },
+                      { label: 'Command Palette', keys: ['Ctrl/Cmd', 'P'] },
+                      { label: 'New Note', keys: ['Ctrl/Cmd', 'N'] },
+                      { label: 'Settings', keys: ['Ctrl/Cmd', ','] },
+                      { label: 'Graph View', keys: ['Ctrl/Cmd', 'G'] },
+                      { label: 'Back/Forward', keys: ['Ctrl/Cmd', 'Alt', '←/→'] }
+                    ].map(item => (
+                      <div key={item.label} className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-textMain">{item.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          {item.keys.map(k => (
+                            <kbd key={k} className="bg-[#1c1c1c] text-[#d4d4d4] text-[10px] font-mono px-2 py-1 rounded-md border border-[#333] border-b-[3px] shadow-sm">
+                              {k}
+                            </kbd>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Editor Shortcuts */}
+                <div>
+                  <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted mb-4 border-b border-border/20 pb-2">Editor</h3>
+                  <div className="flex flex-col gap-4">
+                    {[
+                      { label: 'Bold', keys: ['Ctrl/Cmd', 'B'] },
+                      { label: 'Italic', keys: ['Ctrl/Cmd', 'I'] },
+                      { label: 'Insert Link', keys: ['Ctrl/Cmd', 'K'] },
+                      { label: 'Undo', keys: ['Ctrl/Cmd', 'Z'] },
+                      { label: 'Redo', keys: ['Ctrl/Cmd', 'Shift', 'Z'] }
+                    ].map(item => (
+                      <div key={item.label} className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-textMain">{item.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          {item.keys.map(k => (
+                            <kbd key={k} className="bg-[#1c1c1c] text-[#d4d4d4] text-[10px] font-mono px-2 py-1 rounded-md border border-[#333] border-b-[3px] shadow-sm">
+                              {k}
+                            </kbd>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
               </div>
             </div>
           )}
