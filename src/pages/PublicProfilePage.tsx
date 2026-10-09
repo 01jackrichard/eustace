@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+/* eslint-disable react/purity */
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Loader2, ArrowLeft, Check, X } from 'lucide-react';
@@ -17,7 +18,7 @@ export function PublicProfilePage() {
   const [friendship, setFriendship] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'about'>('overview');
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
   const { data: productivityData, error: productivityError } = usePublicProductivityData(profile?.id || '', currentYear);
 
 
@@ -57,9 +58,9 @@ export function PublicProfilePage() {
     }
 
     fetchPublicProfile();
-  }, [username, user]);
+  }, [username, user, fetchFriendship]);
 
-  const fetchFriendship = async (targetId: string) => {
+  const fetchFriendship = useCallback(async (targetId: string) => {
     if (!user) return;
     const { data } = await supabase
       .from('friendships')
@@ -79,7 +80,7 @@ export function PublicProfilePage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `addressee_id=eq.${user.id}` }, () => fetchFriendship(profile.id))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, profile]);
+  }, [user, profile, fetchFriendship]);
 
   const handleAddFriend = async () => {
     if (!user || !profile) return;

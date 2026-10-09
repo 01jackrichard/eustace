@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useNotesData, type Note } from '../hooks/useNotesData';
 import { supabase } from '../lib/supabase';
 import { RichTextEditor } from '../components/RichTextEditor';
+import { SmoothInput } from '../components/ui/skiper-ui/skiper106';
 import { ArrowLeft, Pin, MoreVertical, Folder, Trash2, Tag, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
@@ -19,8 +20,7 @@ export function NoteEditorPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
-    const [saveState, setSaveState] = useState<'saved' | 'saving' | 'unsaved'>('saved');
-  const [showMenu, setShowMenu] = useState(false);
+      const [showMenu, setShowMenu] = useState(false);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
@@ -71,16 +71,16 @@ export function NoteEditorPage() {
   }, [id, navigate]);
   // Debounced Save
   const triggerSave = (newTitle: string, newContent: string) => {
-    setSaveState('unsaved');
+    
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     const currentGen = ++saveGenerationRef.current;
 
     saveTimeoutRef.current = setTimeout(async () => {
       if (!id || currentGen !== saveGenerationRef.current) return;
-      setSaveState('saving');
-      const success = await updateNote(id, { title: newTitle.trim() || 'Untitled', content: newContent }, false);
+      
+      await updateNote(id, { title: newTitle.trim() || 'Untitled', content: newContent }, false);
       if (currentGen === saveGenerationRef.current) {
-        setSaveState(success ? 'saved' : 'unsaved');
+        
       }
     }, 1000);
   };
@@ -107,10 +107,10 @@ export function NoteEditorPage() {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         const currentGen = ++saveGenerationRef.current;
         if (id) {
-          setSaveState('saving');
-          updateNote(id, { title: latestTitleRef.current.trim() || 'Untitled', content: latestContentRef.current }, false).then(success => {
+          
+          updateNote(id, { title: latestTitleRef.current.trim() || 'Untitled', content: latestContentRef.current }, false).then(() => {
             if (currentGen === saveGenerationRef.current) {
-              setSaveState(success ? 'saved' : 'unsaved');
+              
             }
           });
         }
@@ -120,7 +120,7 @@ export function NoteEditorPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [id, updateNote]);
 
-  const handleTitleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const newTitle = e.target.value;
     setTitle(newTitle);
     triggerSave(newTitle, latestContentRef.current);
@@ -168,11 +168,7 @@ export function NoteEditorPage() {
           >
             <ArrowLeft size={18} />
           </button>
-          <div className="flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase text-textMuted/70">
-            {saveState === 'saving' && <span className="text-orange-500 animate-pulse">Saving...</span>}
-            {saveState === 'saved' && <span>Saved</span>}
-            {saveState === 'unsaved' && <span>Unsaved changes</span>}
-          </div>
+          
         </div>
 
         <div className="flex items-center gap-2 relative">
@@ -216,13 +212,23 @@ export function NoteEditorPage() {
 
       {/* Editor Area */}
       <div className="flex flex-col gap-6 flex-1 pb-32 max-w-4xl">
-        <textarea
-          value={title}
-          onChange={handleTitleChange}
-          placeholder="Note Title"
-          rows={1}
-          className="w-full bg-transparent text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-textMain placeholder-textMuted/30 outline-none resize-none leading-tight"
+        <SmoothInput
+            value={title}
+            onChange={handleTitleChange}
+            placeholder="Note Title"
+            className="w-full bg-transparent text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-textMain placeholder-textMuted/30 outline-none resize-none leading-tight border-none p-0 focus:ring-0"
           />
+        
+        {/* Tags UI */}
+        {note?.tags && note.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {note.tags.map(tag => (
+              <span key={tag} className="flex items-center gap-1 bg-orange-500/10 text-orange-500 px-2.5 py-1 rounded-md text-xs font-semibold">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         <RichTextEditor 
           content={content} 

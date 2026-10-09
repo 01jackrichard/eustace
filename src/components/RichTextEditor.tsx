@@ -1,4 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { motion, useMotionValue, useSpring } from 'framer-motion';
+
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -15,6 +17,23 @@ interface RichTextEditorProps {
   onChange: (content: string) => void;
 }
 
+const Button = ({ icon: Icon, onClick, isActive = false, title }: any) => (
+    <button
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => { e.preventDefault(); onClick(); }}
+      title={title}
+      className={cn(
+        "flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 outline-none text-[#A0A0A0]",
+        "hover:bg-[#2A2A2A] hover:text-[#FF5722]",
+        isActive && "text-[#FF5722] bg-[#FF5722]/10"
+      )}
+    >
+      <Icon size={16} strokeWidth={isActive ? 2.5 : 2} />
+    </button>
+  );
+
+const Divider = () => <div className="w-[1px] h-5 bg-white/10 mx-1.5 rounded-full" />;
+
 const MenuBar = ({ editor }: { editor: any }) => {
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
   React.useEffect(() => {
@@ -30,22 +49,9 @@ const MenuBar = ({ editor }: { editor: any }) => {
     return null;
   }
 
-  const Button = ({ icon: Icon, onClick, isActive = false, title }: any) => (
-    <button
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={(e) => { e.preventDefault(); onClick(); }}
-      title={title}
-      className={cn(
-        "flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 outline-none text-[#A0A0A0]",
-        "hover:bg-[#2A2A2A] hover:text-[#FF5722]",
-        isActive && "text-[#FF5722] bg-[#FF5722]/10"
-      )}
-    >
-      <Icon size={16} strokeWidth={isActive ? 2.5 : 2} />
-    </button>
-  );
+  
 
-  const Divider = () => <div className="w-[1px] h-5 bg-white/10 mx-1.5 rounded-full" />;
+  
 
   return (
     <div className="sticky top-0 z-10 flex items-center gap-1 p-1.5 mb-4 rounded-xl bg-[#121212]/90 backdrop-blur-md border border-white/5 shadow-2xl overflow-x-auto custom-scrollbar">
@@ -138,7 +144,93 @@ const MenuBar = ({ editor }: { editor: any }) => {
   );
 };
 
+
+const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: React.RefObject<HTMLDivElement> }) => {
+  const caretX = useMotionValue(0);
+  const caretY = useMotionValue(0);
+  const caretHeight = useMotionValue(24);
+  const caretOpacity = useMotionValue(0);
+
+  const springConfig = { stiffness: 500, damping: 30, mass: 0.5 };
+  const springX = useSpring(caretX, springConfig);
+  const springY = useSpring(caretY, springConfig);
+  const springHeight = useSpring(caretHeight, springConfig);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const updateCaret = () => {
+      if (!editor.isFocused || !containerRef.current) {
+        caretOpacity.set(0);
+        return;
+      }
+
+      const { state, view } = editor;
+      const { selection } = state;
+      
+      if (!selection.empty) {
+        caretOpacity.set(0);
+        return;
+      }
+
+      try {
+        const coords = view.coordsAtPos(selection.head);
+        const wrapper = containerRef.current;
+        const rect = wrapper.getBoundingClientRect();
+        
+        const relativeX = (coords.left - rect.left) + wrapper.scrollLeft;
+        const relativeY = (coords.top - rect.top) + wrapper.scrollTop;
+        const height = coords.bottom - coords.top;
+
+        caretX.set(relativeX);
+        caretY.set(relativeY);
+        if (height > 0) caretHeight.set(height);
+        caretOpacity.set(1);
+      } catch (e) {
+        // Ignore if coords can't be resolved
+      }
+    };
+
+    editor.on('transaction', updateCaret);
+    editor.on('selectionUpdate', updateCaret);
+    editor.on('focus', updateCaret);
+    editor.on('blur', updateCaret);
+
+    // Also update on scroll/resize
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('scroll', updateCaret);
+      window.addEventListener('resize', updateCaret);
+    }
+
+    return () => {
+      editor.off('transaction', updateCaret);
+      editor.off('selectionUpdate', updateCaret);
+      editor.off('focus', updateCaret);
+      editor.off('blur', updateCaret);
+      if (container) {
+        container.removeEventListener('scroll', updateCaret);
+        window.removeEventListener('resize', updateCaret);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, containerRef]);
+
+  return (
+    <motion.div
+      className="absolute top-0 left-0 w-[2px] bg-orange-500 rounded-full pointer-events-none z-50"
+      style={{
+        x: springX,
+        y: springY,
+        height: springHeight,
+        opacity: caretOpacity,
+      }}
+    />
+  );
+};
+
 export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -157,7 +249,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-invert prose-orange max-w-none focus:outline-none min-h-[300px] text-base md:text-lg leading-relaxed',
+        class: 'caret-transparent prose prose-invert prose-orange max-w-none focus:outline-none min-h-[300px] text-base md:text-lg leading-relaxed',
       },
     },
   });
@@ -172,7 +264,8 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
   return (
     <div className="flex-1 flex flex-col w-full h-full text-textMain">
       <MenuBar editor={editor} />
-      <div className="flex-1 w-full bg-transparent overflow-y-auto pb-32 cursor-text" onClick={() => editor?.commands.focus()}>
+      <div ref={containerRef} className="flex-1 w-full bg-transparent overflow-y-auto pb-32 cursor-text relative" onClick={() => editor?.commands.focus()}>
+        <SmoothCaret editor={editor} containerRef={containerRef} />
         <EditorContent editor={editor} className="w-full h-full" />
       </div>
     </div>

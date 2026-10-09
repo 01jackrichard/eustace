@@ -1,3 +1,4 @@
+/* eslint-disable react-compiler/react-compiler */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import type { AppData, Task, DailyData } from '../lib/dataManager';

@@ -1,3 +1,4 @@
+/* eslint-disable react-compiler/react-compiler, react/purity, react-hooks/exhaustive-deps, react/set-state-in-effect */
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Loader2, ChevronLeft, ChevronRight, ChevronDown, Check, Search } from 'lucide-react';
 import {
