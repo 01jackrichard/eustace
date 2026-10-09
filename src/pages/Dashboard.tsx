@@ -10,7 +10,7 @@ import { AddTaskModal } from '../components/AddTaskModal';
 import { InteractiveHero } from '../components/InteractiveHero';
 
 export function Dashboard() {
-  const { checkLocalData, migrateLocalData } = useAuth();
+  const { checkLocalData, migrateLocalData, profile } = useAuth();
   const [currentYear] = useState<number>(new Date().getFullYear());
   const [heroActivated, setHeroActivated] = useState(() => sessionStorage.getItem('eustace_hero_activated') === 'true');
 
@@ -128,7 +128,7 @@ export function Dashboard() {
                        <span className="text-[9px] font-bold tracking-widest text-textMuted uppercase">Progress</span>
                     </div>
                     <div className="flex flex-col gap-2">
-                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter tabular-nums">{stats.currentStreak}</span>
+                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter tabular-nums">{profile?.current_streak ?? stats.currentStreak}</span>
                        <span className="text-[9px] font-bold tracking-widest text-textMuted uppercase">Day Streak</span>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -248,4 +248,6 @@ export function Dashboard() {
     </>
   );
 }
+
+
 
