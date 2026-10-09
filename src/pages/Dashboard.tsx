@@ -237,7 +237,7 @@ export function Dashboard() {
           {/* MODALS */}
           {isAddModalOpen && (
             <AddTaskModal
-              date={today}
+              date={dateStr}
               onClose={() => setIsAddModalOpen(false)}
               onAdd={(t) => addTask({ ...t, createdAt: dateStr })}
             />

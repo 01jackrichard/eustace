@@ -5,13 +5,22 @@ import { MobileHeader } from './MobileHeader';
 import { MobileBottomNav } from './MobileBottomNav';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Loader2 } from 'lucide-react';
+import { Loader2, PanelLeft } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { cn } from '../lib/utils';
 
 export function ProtectedLayout() {
   const { user, profile, loading, refreshProfile } = useAuth();
   
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('eustace_sidebar_state');
+    return saved !== 'closed';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('eustace_sidebar_state', isSidebarOpen ? 'open' : 'closed');
+  }, [isSidebarOpen]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -29,11 +38,29 @@ export function ProtectedLayout() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col">
-      <Sidebar />
-      <MobileHeader />
+    <div className="min-h-[100dvh] bg-background flex flex-col relative">
+      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+      <MobileHeader onMenuClick={() => setIsSidebarOpen(true)} />
       
-      <main className="flex-1 flex flex-col md:pl-64 pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(60px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 min-h-[100dvh]">
+      {/* Floating Toggle (Closed State Desktop) */}
+      <button
+        onClick={() => setIsSidebarOpen(true)}
+        title="Expand sidebar"
+        aria-label="Expand sidebar"
+        className={cn(
+          "fixed top-4 left-4 z-40 p-2 rounded-lg text-textMuted hover:text-textMain hover:bg-surface border border-transparent transition-all duration-300 md:flex hidden bg-background/80 backdrop-blur-sm",
+          isSidebarOpen ? "opacity-0 pointer-events-none -translate-x-full" : "opacity-100 translate-x-0"
+        )}
+      >
+        <PanelLeft size={20} />
+      </button>
+
+      <main 
+        className={cn(
+          "flex-1 flex flex-col pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(60px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 min-h-[100dvh] transition-[padding] duration-300 ease-in-out",
+          isSidebarOpen ? "md:pl-64" : "md:pl-0"
+        )}
+      >
         <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
           <Outlet />
         </div>

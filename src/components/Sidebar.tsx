@@ -1,12 +1,25 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, User as UserIcon, Calendar, CheckSquare, BarChart2, Users, Settings, ChevronDown, LogOut, FileText } from 'lucide-react';
+import { LayoutDashboard, User as UserIcon, Calendar, CheckSquare, BarChart2, Users, Settings, ChevronDown, LogOut, FileText, PanelLeftClose } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+}
+
+export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
   const { user, profile, signOut } = useAuth();
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) setIsOpen(false);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, setIsOpen]);
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -17,20 +30,50 @@ export function Sidebar() {
     { name: 'Friends', path: '/friends', icon: Users },
   ];
 
+  const handleNavClick = () => {
+    if (window.innerWidth < 768) {
+      setIsOpen(false);
+    }
+  };
+
   return (
-    <aside className="fixed inset-y-0 left-0 w-64 bg-background border-r border-border/60 hidden md:flex flex-col z-40">
-      <div className="p-6 pb-4">
-        <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="Eustace Logo" className="h-6 w-6 object-contain" />
-          <h1 className="text-sm font-bold tracking-widest text-textMain uppercase">EUSTACE</h1>
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden" 
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside 
+        className={cn(
+          "fixed inset-y-0 left-0 w-64 bg-background border-r border-border/60 flex flex-col z-50 transition-transform duration-300 ease-in-out",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="p-6 pb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="Eustace Logo" className="h-6 w-6 object-contain" />
+            <h1 className="text-sm font-bold tracking-widest text-textMain uppercase">EUSTACE</h1>
+          </div>
+          <button
+            onClick={() => setIsOpen(false)}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            className="p-1.5 rounded-lg text-textMuted hover:text-textMain hover:bg-surface transition-colors hidden md:block"
+          >
+            <PanelLeftClose size={18} />
+          </button>
         </div>
-      </div>
 
       <nav className="flex-1 px-4 flex flex-col gap-0.5 overflow-y-auto mt-4">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
+            onClick={handleNavClick}
             className={({ isActive }) => cn(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
               isActive
@@ -46,6 +89,7 @@ export function Sidebar() {
         <div className="mt-auto mb-4 border-t border-border/50 pt-4 flex flex-col gap-1">
           <NavLink
             to="/profile"
+            onClick={handleNavClick}
             className={({ isActive }) => cn(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group border",
               isActive
@@ -64,6 +108,7 @@ export function Sidebar() {
           </NavLink>
           <NavLink
             to="/settings"
+            onClick={handleNavClick}
             className={({ isActive }) => cn(
               "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
               isActive
@@ -101,7 +146,10 @@ export function Sidebar() {
         {showAccountMenu && (
           <div className="absolute bottom-full left-4 right-4 mb-2 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-50 animate-pop">
             <button
-              onClick={signOut}
+              onClick={() => {
+                signOut();
+                handleNavClick();
+              }}
               className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left"
             >
               <LogOut size={16} />
@@ -111,6 +159,7 @@ export function Sidebar() {
         )}
       </div>
     </aside>
+    </>
   );
 }
 

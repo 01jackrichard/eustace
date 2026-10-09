@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { format, addDays, subDays, isToday } from 'date-fns';
-import { Check, ChevronLeft, ChevronRight, Plus, MoreVertical, Trash2, Edit2, Repeat, CheckCircle2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Plus, MoreVertical, Trash2, Edit2, Repeat, CheckCircle2, Circle } from 'lucide-react';
+import * as Icons from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getTasksForDate, getDayCompletionInfo, parseTaskMetadata, serializeTaskMetadata, type AppData, type Task } from '../lib/dataManager';
 import { AddTaskModal } from './AddTaskModal';
@@ -200,6 +201,20 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
                 const isRecurring = task.recurring !== 'none';
                 const meta = parseTaskMetadata(task);
 
+                let SelectedIcon: any = meta.icon ? (Icons as any)[meta.icon] : null;
+                if (!SelectedIcon) {
+                  // Heuristic fallback matching DayPlanner
+                  const t = task.name.toLowerCase();
+                  if (t.includes('workout') || t.includes('gym') || t.includes('exercise') || t.includes('run') || t.includes('swim')) SelectedIcon = Icons.Activity;
+                  else if (t.includes('study') || t.includes('read') || t.includes('learn') || t.includes('french')) SelectedIcon = Icons.BookOpen;
+                  else if (t.includes('code') || t.includes('dsa') || t.includes('dev') || t.includes('program')) SelectedIcon = Icons.Code;
+                  else if (t.includes('food') || t.includes('breakfast') || t.includes('lunch') || t.includes('dinner') || t.includes('coffee')) SelectedIcon = Icons.Coffee;
+                  else if (t.includes('sleep') || t.includes('rest') || t.includes('nap')) SelectedIcon = Icons.Moon;
+                  else if (t.includes('work') || t.includes('meeting') || t.includes('call')) SelectedIcon = Icons.Briefcase;
+                  else if (t.includes('health') || t.includes('meditate') || t.includes('care')) SelectedIcon = Icons.Heart;
+                  else SelectedIcon = Circle;
+                }
+
                 return (
                   <div
                     key={task.id}
@@ -227,7 +242,11 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
                     </button>
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center pt-0.5">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <SelectedIcon size={16} className={cn(
+                          "flex-shrink-0 transition-colors", 
+                          isCompleted ? "text-textMuted" : meta.icon ? "text-accent" : "text-textMuted/70"
+                        )} />
                         <span className={cn(
                           "text-base font-medium transition-all duration-300 truncate",
                           isCompleted ? "text-textMuted line-through" : "text-textMain",
@@ -344,7 +363,7 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
 
       {(isAddModalOpen || editingTask) && (
         <AddTaskModal
-          date={date}
+          date={format(date, 'yyyy-MM-dd')}
           initialTask={editingTask || undefined}
           onClose={() => {
             setIsAddModalOpen(false);
