@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, Search, Plus, Check } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Search, Plus, Check, Filter, X } from 'lucide-react';
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval,
   isSameMonth, isSameDay, isToday, startOfWeek, endOfWeek,
@@ -10,7 +10,8 @@ import { cn } from '../lib/utils';
 import { useProductivityData } from '../hooks/useProductivityData';
 import { DayPlanner } from '../components/DayPlanner';
 import { AddTaskModal } from '../components/AddTaskModal';
-import { getTasksForDate, parseTaskMetadata, Task } from '../lib/dataManager';
+import { getTasksForDate, parseTaskMetadata } from '../lib/dataManager';
+import type { Task } from '../lib/dataManager';
 import * as Icons from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -20,6 +21,7 @@ export function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set(['ALL']));
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [moreTasksDate, setMoreTasksDate] = useState<Date | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -304,67 +306,116 @@ export function CalendarPage() {
   return (
     <div className="-mx-4 md:-mx-8 -mt-4 md:-mt-8 -mb-4 md:-mb-8 h-[calc(100dvh-56px-60px)] md:h-[100dvh] flex flex-col md:flex-row bg-background">
       
-      {/* LEFT PANEL */}
-      <div className="w-full md:w-[260px] flex-shrink-0 border-r border-border/40 p-4 md:p-6 flex flex-col gap-6 overflow-y-auto bg-surface/10">
-        
-        <h1 className="text-2xl font-black text-textMain tracking-tight hidden md:block">CALENDAR</h1>
-
-        {/* Search */}
-        <div className="relative shrink-0">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
-          <input 
-            type="text" 
-            placeholder="Search tasks..." 
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-surface border border-border/60 rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-accent text-textMain shadow-sm"
-          />
-        </div>
-
-        {/* Mini Calendar */}
-        <div className="shrink-0 hidden md:block">
-          {renderMiniCalendar()}
-        </div>
-
-        {/* Task Filters / My Calendars */}
-        <div className="flex-1 flex flex-col min-h-0 hidden md:flex">
-          <h3 className="text-xs font-bold text-textMain mb-3 px-1 uppercase tracking-wider">My Tasks</h3>
-          <div className="flex-1 overflow-y-auto pr-2 space-y-1 scrollbar-thin">
-            <button
-              onClick={() => toggleTaskSelection('ALL')}
-              className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
-            >
-              <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
-                {selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
+              {/* MOBILE FILTER BUTTON & DRAWER */}
+        {isFilterOpen && (
+          <div className="md:hidden fixed inset-0 z-[100] flex flex-col bg-background/95 backdrop-blur-xl animate-in fade-in duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-border/40 shrink-0 pt-[calc(16px+env(safe-area-inset-top))]">
+              <h2 className="text-sm font-bold tracking-widest uppercase text-textMain">Calendar Filters</h2>
+              <button onClick={() => setIsFilterOpen(false)} className="p-2 bg-surface/50 rounded-full text-textMuted hover:text-textMain transition-colors"><X size={18} /></button>
+            </div>
+            <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-6 pb-[env(safe-area-inset-bottom)]">
+              {/* Search */}
+              <div className="relative shrink-0">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+                <input 
+                  type="text" 
+                  placeholder="Search tasks..." 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full bg-surface border border-border/60 rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-accent text-textMain shadow-sm"
+                />
               </div>
-              <span className="text-sm font-medium text-textMain truncate">All Tasks</span>
-            </button>
-            {allTasks.map(task => (
+
+              {/* Task Filters */}
+              <div className="flex-1 min-h-0 flex flex-col">
+                <h3 className="text-xs font-bold text-textMain mb-3 px-1 uppercase tracking-wider">My Tasks</h3>
+                <div className="flex-1 overflow-y-auto pr-2 space-y-1">
+                  <button
+                    onClick={() => toggleTaskSelection('ALL')}
+                    className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
+                  >
+                    <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
+                      {selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
+                    </div>
+                    <span className="text-sm font-medium text-textMain truncate">All Tasks</span>
+                  </button>
+                  {allTasks.map(task => (
+                    <button
+                      key={task.id}
+                      onClick={() => toggleTaskSelection(task.id)}
+                      className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
+                    >
+                      <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has(task.id) && !selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
+                        {selectedTasks.has(task.id) && !selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
+                      </div>
+                      <span className="text-sm text-textMuted truncate">{task.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DESKTOP LEFT PANEL */}
+        <div className="hidden md:flex flex-col w-[260px] flex-shrink-0 border-r border-border/40 p-6 gap-6 overflow-y-auto bg-surface/10">
+          <h1 className="text-2xl font-black text-textMain tracking-tight">CALENDAR</h1>
+          
+          {/* Search */}
+          <div className="relative shrink-0">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+            <input 
+              type="text" 
+              placeholder="Search tasks..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full bg-surface border border-border/60 rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-accent text-textMain shadow-sm"
+            />
+          </div>
+
+          {/* Mini Calendar */}
+          <div className="shrink-0">
+            {renderMiniCalendar()}
+          </div>
+
+          {/* Task Filters / My Calendars */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <h3 className="text-xs font-bold text-textMain mb-3 px-1 uppercase tracking-wider">My Tasks</h3>
+            <div className="flex-1 overflow-y-auto pr-2 space-y-1 scrollbar-thin">
               <button
-                key={task.id}
-                onClick={() => toggleTaskSelection(task.id)}
+                onClick={() => toggleTaskSelection('ALL')}
                 className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
               >
-                <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has(task.id) && !selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
-                  {selectedTasks.has(task.id) && !selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
+                <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
+                  {selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
                 </div>
-                <span className="text-sm text-textMuted truncate">{task.name}</span>
+                <span className="text-sm font-medium text-textMain truncate">All Tasks</span>
               </button>
-            ))}
+              {allTasks.map(task => (
+                <button
+                  key={task.id}
+                  onClick={() => toggleTaskSelection(task.id)}
+                  className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
+                >
+                  <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has(task.id) && !selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
+                    {selectedTasks.has(task.id) && !selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
+                  </div>
+                  <span className="text-sm text-textMuted truncate">{task.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Add Task Button */}
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="w-full bg-accent text-background hover:bg-accent/90 transition-colors py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold shadow-md shrink-0"
+          >
+            <Plus size={16} />
+            Add Task
+          </button>
         </div>
-
-        {/* Add Task Button */}
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="w-full bg-accent text-background hover:bg-accent/90 transition-colors py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold shadow-md shrink-0"
-        >
-          <Plus size={16} />
-          Add Task
-        </button>
-      </div>
-
-      {/* MAIN AREA */}
+{/* MAIN AREA */}
       <div className="flex-1 flex flex-col min-w-0 bg-background relative h-full overflow-hidden">
         {loading && (
           <div className="absolute inset-0 z-50 bg-background/50 flex items-center justify-center">
@@ -373,18 +424,18 @@ export function CalendarPage() {
         )}
         
         {/* TOOLBAR */}
-        <div className="flex items-center justify-between p-3 md:p-4 border-b border-border/40 shrink-0">
-          <div className="flex items-center gap-3 md:gap-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 md:p-4 border-b border-border/40 shrink-0 gap-4 sm:gap-0">
+          <div className="flex items-center gap-3 md:gap-6 w-full sm:w-auto justify-between sm:justify-start">
             <h2 className="text-lg md:text-xl font-bold text-textMain min-w-[120px] md:min-w-[160px]">
               {view === 'day' 
                 ? format(selectedDate, 'MMM d, yyyy') 
-                : view === 'week' 
+                : false 
                   ? `${format(startOfWeek(currentDate), 'MMM d')} - ${format(endOfWeek(currentDate), 'MMM d, yyyy')}` 
                   : view === 'year'
                     ? format(currentDate, 'yyyy')
                     : format(currentDate, 'MMMM yyyy')}
             </h2>
-            <div className="flex items-center gap-1 md:gap-2">
+            <div className="flex items-center gap-1 md:gap-2">`n                <button onClick={() => setIsFilterOpen(true)} className="md:hidden p-1.5 rounded-md border border-border/60 hover:bg-surface transition-all text-textMain"><Filter size={18}/></button>
               <button onClick={handleSetToday} className="px-3 py-1.5 text-xs font-bold border border-border/60 rounded-md hover:bg-surface transition-colors hidden md:block uppercase tracking-wider">
                 Today
               </button>
@@ -395,7 +446,7 @@ export function CalendarPage() {
             </div>
           </div>
           
-          <div className="relative flex bg-surface/30 p-[3px] rounded-[10px] border border-border/40" role="tablist">
+          <div className="relative flex w-full sm:w-auto bg-surface/30 p-[3px] rounded-[10px] border border-border/40" role="tablist">
             {['day', 'month', 'year'].map(v => {
               const isActive = view === v;
               return (
@@ -405,7 +456,7 @@ export function CalendarPage() {
                   aria-selected={isActive}
                   onClick={() => setView(v as any)}
                   className={cn(
-                    "relative px-4 py-1.5 text-xs font-bold uppercase tracking-widest rounded-[7px] transition-colors z-10 min-w-[70px] text-center outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+                    "relative px-4 py-1.5 text-xs font-bold uppercase tracking-widest rounded-[7px] transition-colors z-10 min-w-[70px] flex-1 sm:flex-none text-center outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
                     isActive ? "text-textMain" : "text-textMuted hover:text-textMain/80"
                   )}
                 >
@@ -551,3 +602,6 @@ export function CalendarPage() {
     </div>
   );
 }
+
+
+

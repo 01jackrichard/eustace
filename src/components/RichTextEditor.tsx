@@ -218,7 +218,7 @@ const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: Reac
 
   return (
     <motion.div
-      className="absolute top-0 left-0 w-[2px] bg-orange-500 rounded-full pointer-events-none z-50"
+      className="absolute top-0 left-0 w-[2px] bg-accent-500 rounded-full pointer-events-none z-50"
       style={{
         x: springX,
         y: springY,
@@ -249,7 +249,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
     },
     editorProps: {
       attributes: {
-        class: 'caret-transparent prose prose-invert prose-orange max-w-none focus:outline-none min-h-[300px] text-base md:text-lg leading-relaxed',
+        class: 'caret-transparent prose prose-invert prose-accent max-w-none focus:outline-none min-h-[300px] text-base md:text-lg leading-relaxed',
       },
     },
   });

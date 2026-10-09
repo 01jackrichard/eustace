@@ -120,19 +120,19 @@ export function Dashboard() {
                  </div>
                  <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                     <div className="flex flex-col gap-2">
-                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter">{String(remainingTasksCount).padStart(2, '0')}</span>
+                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter tabular-nums">{String(remainingTasksCount).padStart(2, '0')}</span>
                        <span className="text-[9px] font-bold tracking-widest text-textMuted uppercase">Tasks Remaining</span>
                     </div>
                     <div className="flex flex-col gap-2">
-                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter">{info.percent}%</span>
+                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter tabular-nums">{info.percent}%</span>
                        <span className="text-[9px] font-bold tracking-widest text-textMuted uppercase">Progress</span>
                     </div>
                     <div className="flex flex-col gap-2">
-                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter">{stats.currentStreak}</span>
+                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter tabular-nums">{stats.currentStreak}</span>
                        <span className="text-[9px] font-bold tracking-widest text-textMuted uppercase">Day Streak</span>
                     </div>
                     <div className="flex flex-col gap-2">
-                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter">{stats.longestStreak}</span>
+                       <span className="text-4xl md:text-5xl font-black text-textMain tracking-tighter tabular-nums">{stats.longestStreak}</span>
                        <span className="text-[9px] font-bold tracking-widest text-textMuted uppercase">Longest Streak</span>
                     </div>
                  </div>

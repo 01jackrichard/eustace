@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, User as UserIcon, Calendar, CheckSquare, BarChart2, Users, Settings, ChevronDown, LogOut, FileText, PanelLeftClose } from 'lucide-react';
+import { LayoutDashboard, User as UserIcon, Calendar, CheckSquare, BarChart2, Users, Settings, ChevronDown, LogOut, FileText, PanelLeftClose , Trophy } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { useState, useEffect } from 'react';
@@ -28,6 +28,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
     { name: 'Notes', path: '/notes', icon: FileText },
     { name: 'Analytics', path: '/analytics', icon: BarChart2 },
     { name: 'Friends', path: '/friends', icon: Users },
+    { name: 'Transcend', path: '/transcend', icon: Trophy },
   ];
 
   const handleNavClick = () => {

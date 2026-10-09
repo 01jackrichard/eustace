@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Check, CalendarDays, ChevronDown, Clock, Search } from 'lucide-react';
-import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
+import { X, Check, ChevronDown, Clock } from 'lucide-react';
+import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
 import * as Icons from 'lucide-react';
 import type { Task, TaskMetadata } from '../lib/dataManager';
 import { parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
@@ -38,12 +38,10 @@ const TIME_OPTIONS = generateTimeOptions();
 // Interactive Date Picker Popover Component
 function DatePickerPopover({ 
   selectedDate, 
-  onSelect, 
-  onClose 
+  onSelect
 }: { 
   selectedDate: Date, 
-  onSelect: (date: Date) => void,
-  onClose: () => void
+  onSelect: (date: Date) => void
 }) {
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(selectedDate));
   
@@ -108,7 +106,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   
   // Date and Time
-  const [taskDateStr, setTaskDateStr] = useState(meta.startDate || date); // YYYY-MM-DD
+  const [taskDateStr] = useState(meta.startDate || date); // YYYY-MM-DD
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   
   const [hasTime, setHasTime] = useState<boolean>(!!meta.startTime || !!initialStartTime);
@@ -368,7 +366,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                         <DatePickerPopover 
                           selectedDate={endDate ? new Date(endDate + 'T12:00:00') : new Date(taskDateStr + 'T12:00:00')}
                           onSelect={(d) => { setEndDate(format(d, 'yyyy-MM-dd')); setIsDatePickerOpen(false); }}
-                          onClose={() => setIsDatePickerOpen(false)}
+                          
                         />
                       )}
                     </div>

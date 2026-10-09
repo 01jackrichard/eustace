@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  async function fetchProfile(userId: string) {
     try {
       const [profileRes, statsRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),

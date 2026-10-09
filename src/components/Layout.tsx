@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileHeader } from './MobileHeader';
 import { MobileBottomNav } from './MobileBottomNav';
@@ -8,9 +8,11 @@ import { supabase } from '../lib/supabase';
 import { Loader2, PanelLeft } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function ProtectedLayout() {
   const { user, profile, loading, refreshProfile } = useAuth();
+  const location = useLocation();
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('eustace_sidebar_state');
@@ -40,7 +42,7 @@ export function ProtectedLayout() {
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col relative">
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-      <MobileHeader onMenuClick={() => setIsSidebarOpen(true)} />
+      <MobileHeader />
       
       {/* Floating Toggle (Closed State Desktop) */}
       <button
@@ -61,9 +63,18 @@ export function ProtectedLayout() {
           isSidebarOpen ? "md:pl-64" : "md:pl-0"
         )}
       >
-        <div className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
-          <Outlet />
-        </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full flex flex-col min-h-full"
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <MobileBottomNav />

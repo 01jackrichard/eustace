@@ -89,7 +89,7 @@ export function NotesPage() {
   if (loading && notes.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-[#050505]">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
       </div>
     );
   }
@@ -125,7 +125,7 @@ export function NotesPage() {
                 onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
                 className="flex items-center gap-2 px-3 py-1.5 bg-[#111111] hover:bg-[#1a1a1a] border border-border/40 rounded-xl transition-all"
               >
-                <span className="text-orange-500">{getDropdownIcon()}</span>
+                <span className="text-accent">{getDropdownIcon()}</span>
                 <span className="text-sm font-bold tracking-wide text-textMain">{getDropdownLabel()}</span>
                 <ChevronDown size={14} className="text-textMuted ml-1" />
               </button>
@@ -147,7 +147,7 @@ export function NotesPage() {
                   <div className="border-t border-border/30 p-2 flex flex-col gap-1">
                     <div className="flex items-center justify-between px-3 py-1 mb-1">
                       <span className="text-[10px] font-bold uppercase tracking-widest text-textMuted">Folders</span>
-                      <button onClick={() => { setEditingFolder(null); setIsFolderModalOpen(true); setIsViewDropdownOpen(false); }} className="text-textMuted hover:text-orange-500 transition-colors">
+                      <button onClick={() => { setEditingFolder(null); setIsFolderModalOpen(true); setIsViewDropdownOpen(false); }} className="text-textMuted hover:text-accent transition-colors">
                         <Plus size={12} />
                       </button>
                     </div>
@@ -157,7 +157,7 @@ export function NotesPage() {
                           onClick={() => { setSelectedFolderId(f.id); setIsViewDropdownOpen(false); }}
                           className={cn("flex items-center gap-3 flex-1 text-left truncate", selectedFolderId === f.id ? "text-textMain" : "text-textMuted hover:text-textMain")}
                         >
-                          <Folder size={14} className={selectedFolderId === f.id ? "text-orange-500" : ""} />
+                          <Folder size={14} className={selectedFolderId === f.id ? "text-accent" : ""} />
                           <span className="truncate">{f.name}</span>
                         </button>
                         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
@@ -173,7 +173,7 @@ export function NotesPage() {
 
             <button
               onClick={handleNewNote}
-              className="p-1.5 bg-orange-500/10 text-orange-500 hover:bg-orange-500 hover:text-white rounded-lg transition-colors"
+              className="p-1.5 bg-accent/10 text-accent hover:bg-accent hover:text-white rounded-lg transition-colors"
               title="New Note"
             >
               <Plus size={16} />
@@ -188,7 +188,7 @@ export function NotesPage() {
               placeholder="Search... (Ctrl+K)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#111111] border border-border/40 focus:border-orange-500/50 rounded-xl pl-9 pr-3 py-2 text-sm text-textMain placeholder-textMuted/50 outline-none transition-all"
+              className="w-full bg-[#111111] border border-border/40 focus:border-accent/50 rounded-xl pl-9 pr-3 py-2 text-sm text-textMain placeholder-textMuted/50 outline-none transition-all"
             />
           </div>
         </div>
@@ -214,13 +214,13 @@ export function NotesPage() {
                       id === note.id ? "bg-[#111111]" : ""
                     )}
                   >
-                    {id === note.id && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-orange-500 rounded-r-full" />}
+                    {id === note.id && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-accent rounded-r-full" />}
                     
                     <div className="flex items-start justify-between gap-2 mb-1 pl-1">
                       <h3 className={cn("text-sm font-semibold truncate", id === note.id ? "text-textMain" : "text-textMain/90")}>
                         {note.title || 'Untitled'}
                       </h3>
-                      {note.is_pinned && <Pin size={12} className="text-orange-500 shrink-0 mt-0.5" />}
+                      {note.is_pinned && <Pin size={12} className="text-accent shrink-0 mt-0.5" />}
                     </div>
                     
                     {note.content && (
@@ -261,7 +261,7 @@ export function NotesPage() {
               onClick={handleNewNote}
               className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#111111] hover:bg-[#1a1a1a] border border-border/40 text-textMain rounded-xl text-sm font-bold tracking-wide transition-all shadow-sm"
             >
-              <Plus size={16} className="text-orange-500" /> New Note
+              <Plus size={16} className="text-accent" /> New Note
             </button>
           </div>
         )}

@@ -190,6 +190,11 @@ export function useProductivityData(year: number) {
   };
 
   const toggleTaskCompletion = async (taskId: string, dateStr: string) => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (dateStr !== todayStr) {
+      toast.error('Tasks can only be completed on their scheduled date.');
+      return;
+    }
     if (!user || !data) return;
 
     const dayData = data.days[dateStr] || { tasks: [], completedTaskIds: [] };
@@ -280,6 +285,11 @@ export function useProductivityData(year: number) {
   };
 
   const toggleManualCompletion = async (dateStr: string) => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (dateStr !== todayStr) {
+      toast.error('Manual completion can only be toggled for today.');
+      return;
+    }
     if (!user || !data) return;
 
     const isManuallyCompleted = !!data.days[dateStr]?.manualCompletion;
@@ -337,3 +347,4 @@ export function useProductivityData(year: number) {
     refresh: fetchData
   };
 }
+

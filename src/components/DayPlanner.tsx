@@ -70,6 +70,7 @@ function formatTime(h: number, m: number) {
 
 export function DayPlanner({ date, data, selectedTaskId, onClose, onChangeDate, hook }: DayPlannerProps) {
   const dateStr = format(date, 'yyyy-MM-dd');
+  const isCurrentDay = dateStr === format(new Date(), 'yyyy-MM-dd');
   const allDayTasks = getTasksForDate(data, dateStr);
   const completedIds = useMemo(() => new Set(data.days[dateStr]?.completedTaskIds || []), [data, dateStr]);
 
@@ -210,14 +211,14 @@ export function DayPlanner({ date, data, selectedTaskId, onClose, onChangeDate, 
                       {activeMenuId === task.id && (
                         <div className="absolute top-10 right-3 w-40 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                           <button
-                            onClick={(e) => { e.stopPropagation(); hook.toggleTaskCompletion(task.id, dateStr); setActiveMenuId(null); }}
-                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2"
+                            onClick={(e) => { e.stopPropagation(); isCurrentDay && hook.toggleTaskCompletion(task.id, dateStr); setActiveMenuId(null); }} disabled={!isCurrentDay} title={!isCurrentDay ? 'Tasks can only be completed on their scheduled date.' : ''}
+                            className={cn("w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2", !isCurrentDay && "opacity-50 cursor-not-allowed")}
                           >
                             <Check size={14} className="text-accent" /> {isCompleted ? 'Mark Undone' : 'Mark Done'}
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditingTask(task); setActiveMenuId(null); }}
-                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2"
+                            className={cn("w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2", !isCurrentDay && "opacity-50 cursor-not-allowed")}
                           >
                             <Edit2 size={14} className="text-textMuted" /> Edit Task
                           </button>
@@ -337,14 +338,14 @@ export function DayPlanner({ date, data, selectedTaskId, onClose, onChangeDate, 
                       {activeMenuId === task.id && (
                         <div className="absolute top-10 right-3 w-40 bg-surface border border-border rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                           <button
-                            onClick={(e) => { e.stopPropagation(); hook.toggleTaskCompletion(task.id, dateStr); setActiveMenuId(null); }}
-                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2"
+                            onClick={(e) => { e.stopPropagation(); isCurrentDay && hook.toggleTaskCompletion(task.id, dateStr); setActiveMenuId(null); }} disabled={!isCurrentDay} title={!isCurrentDay ? 'Tasks can only be completed on their scheduled date.' : ''}
+                            className={cn("w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2", !isCurrentDay && "opacity-50 cursor-not-allowed")}
                           >
                             <Check size={14} className="text-accent" /> {isCompleted ? 'Mark Undone' : 'Mark Done'}
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditingTask(task); setActiveMenuId(null); }}
-                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2"
+                            className={cn("w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2", !isCurrentDay && "opacity-50 cursor-not-allowed")}
                           >
                             <Edit2 size={14} className="text-textMuted" /> Edit Task
                           </button>

@@ -20,6 +20,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dialkit": "^2.0.2",
+    "dotenv": "^18.0.6",
     "framer-motion": "^14.0.0",
     "lucide-react": "^1.50.0",
     "motion": "^14.0.0",
@@ -28,7 +29,8 @@
     "react-hot-toast": "^2.6.1",
     "react-router-dom": "^7.18.4",
     "rrule": "^2.8.1",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@types/node": "^24.19.1",
