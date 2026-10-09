@@ -17,8 +17,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export function CalendarPage() {
   const [view, setView] = useState<'day' | 'month' | 'year'>('month');
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set(['ALL']));
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -427,15 +427,10 @@ export function CalendarPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 md:p-4 border-b border-border/40 shrink-0 gap-4 sm:gap-0">
           <div className="flex items-center gap-3 md:gap-6 w-full sm:w-auto justify-between sm:justify-start">
             <h2 className="text-lg md:text-xl font-bold text-textMain min-w-[120px] md:min-w-[160px]">
-              {view === 'day' 
-                ? format(selectedDate, 'MMM d, yyyy') 
-                : false 
-                  ? `${format(startOfWeek(currentDate), 'MMM d')} - ${format(endOfWeek(currentDate), 'MMM d, yyyy')}` 
-                  : view === 'year'
-                    ? format(currentDate, 'yyyy')
-                    : format(currentDate, 'MMMM yyyy')}
+              {view === 'day' ? format(selectedDate, 'MMM d, yyyy') : view === 'year' ? format(currentDate, 'yyyy') : format(currentDate, 'MMMM yyyy')}
             </h2>
-            <div className="flex items-center gap-1 md:gap-2">`n                <button onClick={() => setIsFilterOpen(true)} className="md:hidden p-1.5 rounded-md border border-border/60 hover:bg-surface transition-all text-textMain"><Filter size={18}/></button>
+            <div className="flex items-center gap-1 md:gap-2">
+                <button onClick={() => setIsFilterOpen(true)} className="md:hidden p-1.5 rounded-md border border-border/60 hover:bg-surface transition-all text-textMain"><Filter size={18}/></button>
               <button onClick={handleSetToday} className="px-3 py-1.5 text-xs font-bold border border-border/60 rounded-md hover:bg-surface transition-colors hidden md:block uppercase tracking-wider">
                 Today
               </button>
@@ -602,6 +597,12 @@ export function CalendarPage() {
     </div>
   );
 }
+
+
+
+
+
+
 
 
 

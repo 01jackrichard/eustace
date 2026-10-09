@@ -160,7 +160,7 @@ export function useFriends() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile?.current_streak]);
+  }, [user, profile]);
 
   useEffect(() => {
     fetchFriendships();
