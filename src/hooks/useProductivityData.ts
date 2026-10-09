@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { AppData, Task, DailyData, TaskMetadata } from '../lib/dataManager';
-import { calculateStats, parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
+import { parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
 import { addDays, parseISO, format } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export function useProductivityData(year: number) {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user } = useAuth();
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -338,5 +338,7 @@ export function useProductivityData(year: number) {
     refresh: fetchData
   };
 }
+
+
 
 
