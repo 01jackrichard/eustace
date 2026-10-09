@@ -69,9 +69,7 @@ export function useFriends() {
             userStreak = calculateStreakFromDates(
               recentCompletions.map(c => c.completed_date)
             );
-            if (userStreak > 0) {
-              supabase.from('user_stats').upsert({ user_id: user.id, current_streak: userStreak }).then();
-            }
+            
           }
         }
       }
@@ -298,3 +296,4 @@ export function useFriends() {
     getFriendshipStatus
   };
 }
+

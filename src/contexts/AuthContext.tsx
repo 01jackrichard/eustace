@@ -79,9 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           if (completions && completions.length > 0) {
             currentStreak = calculateStreakFromDates(completions.map(c => c.completed_date));
-            if (currentStreak > 0) {
-              supabase.from('user_stats').upsert({ user_id: userId, current_streak: currentStreak }).then();
-            }
+            
           }
         }
 
@@ -151,4 +149,5 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
 
