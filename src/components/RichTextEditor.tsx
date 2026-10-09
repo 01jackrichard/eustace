@@ -145,7 +145,7 @@ const MenuBar = ({ editor }: { editor: any }) => {
 };
 
 
-const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: React.RefObject<HTMLDivElement> }) => {
+const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: React.RefObject<HTMLDivElement | null> }) => {
   const caretX = useMotionValue(0);
   const caretY = useMotionValue(0);
   const caretHeight = useMotionValue(24);
