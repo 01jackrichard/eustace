@@ -99,16 +99,7 @@ export function useProductivityData(year: number) {
     fetchData();
   }, [fetchData]);
 
-  useEffect(() => {
-    if (data && user) {
-      const stats = calculateStats(data, year);
-      if (stats.currentStreak !== profile?.current_streak) {
-        supabase.from('user_stats').upsert({ user_id: user.id, current_streak: stats.currentStreak }).then(() => {
-          refreshProfile();
-        });
-      }
-    }
-  }, [data, user, profile?.current_streak, year, refreshProfile]);
+  
 
   const addTask = async (taskData: Omit<Task, 'id'>) => {
     if (!user || !data) return false;
@@ -347,4 +338,5 @@ export function useProductivityData(year: number) {
     refresh: fetchData
   };
 }
+
 
