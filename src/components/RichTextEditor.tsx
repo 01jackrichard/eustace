@@ -160,18 +160,18 @@ const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: Reac
     if (!editor) return;
 
     const updateCaret = () => {
-      requestAnimationFrame(() => {
+      setTimeout(() => {
         if (!editor || editor.isDestroyed || !containerRef.current) return;
         
-        // Safety check for focus. Sometimes in prod document.activeElement is safer
-        const isEditorFocused = editor.isFocused || (containerRef.current.contains(document.activeElement));
+        const { state, view } = editor;
+        if (!state || !view) return;
+
+        // Use ProseMirror's native hasFocus() which is much more reliable in Prod than TipTap's isFocused
+        const isEditorFocused = view.hasFocus() || containerRef.current.contains(document.activeElement);
         if (!isEditorFocused) {
           caretOpacity.set(0);
           return;
         }
-
-        const { state, view } = editor;
-        if (!state || !view) return;
         
         const { selection } = state;
         
@@ -191,13 +191,18 @@ const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: Reac
           
           const relativeX = (coords.left - rect.left) + wrapper.scrollLeft;
           const relativeY = (coords.top - rect.top) + wrapper.scrollTop;
-          const height = coords.bottom - coords.top;
+          
+          // Fallback height in case coordsAtPos returns 0 height on empty lines
+          let height = coords.bottom - coords.top;
+          if (height <= 0 || isNaN(height)) {
+             height = 24; // Sensible default for text-lg
+          }
 
-          if (isNaN(relativeX) || isNaN(relativeY) || isNaN(height)) return;
+          if (isNaN(relativeX) || isNaN(relativeY)) return;
 
           caretX.set(relativeX);
           caretY.set(relativeY);
-          if (height > 0) caretHeight.set(height);
+          caretHeight.set(height);
           caretOpacity.set(1);
         } catch (e) {
           // Ignore if coords can't be resolved
@@ -232,7 +237,7 @@ const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: Reac
 
   return (
     <motion.div
-      className="absolute top-0 left-0 w-[2px] bg-accent-500 rounded-full pointer-events-none z-50"
+      className="absolute top-0 left-0 w-[2px] bg-orange-500 rounded-full pointer-events-none z-50"
       style={{
         x: springX,
         y: springY,
