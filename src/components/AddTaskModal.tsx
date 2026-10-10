@@ -1,3 +1,4 @@
+import { SmoothInput } from './ui/SmoothInput';
 import { useState, useEffect, useRef } from 'react';
 import { X, Check, ChevronDown, Clock } from 'lucide-react';
 import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
@@ -234,7 +235,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                 {SelectedIcon ? <SelectedIcon size={22} className="text-textMain group-hover:scale-110 transition-transform" /> : <Icons.Plus size={20} />}
               </button>
               <div className="flex-1 min-w-0">
-                <input
+                <SmoothInput
                   type="text"
                   placeholder="Task title"
                   value={name}
@@ -242,7 +243,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                   className="w-full bg-transparent text-xl md:text-2xl font-bold text-textMain placeholder:text-textMuted/40 focus:outline-none mb-2"
                   autoFocus
                 />
-                <input
+                <SmoothInput
                   type="text"
                   placeholder="Optional category"
                   value={category}

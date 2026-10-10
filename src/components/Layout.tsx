@@ -1,3 +1,4 @@
+import { SmoothInput } from './ui/SmoothInput';
 import { useState, useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
@@ -200,7 +201,7 @@ function ProfileSetupFlow({ onComplete }: { onComplete: () => Promise<void> }) {
         <form onSubmit={handleSave} className="flex flex-col gap-4">
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Display Name</label>
-            <input 
+            <SmoothInput 
               type="text" 
               value={name} 
               onChange={e => setName(e.target.value)} 
@@ -211,7 +212,7 @@ function ProfileSetupFlow({ onComplete }: { onComplete: () => Promise<void> }) {
           </div>
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Username</label>
-            <input 
+            <SmoothInput 
               type="text" 
               value={username} 
               onChange={e => setUsername(e.target.value)} 

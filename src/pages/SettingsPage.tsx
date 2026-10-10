@@ -1,3 +1,4 @@
+import { SmoothInput } from '../components/ui/SmoothInput';
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -417,14 +418,14 @@ export function SettingsPage() {
                 <div className="flex flex-col">
                   <span className="text-sm font-bold text-textMain mb-4">Change Password</span>
                   <div className="flex flex-col gap-4 max-w-sm">
-                    <input
+                    <SmoothInput
                       type="password"
                       placeholder="New password"
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       className="w-full bg-surface border border-border/30 rounded-md px-4 py-2 text-sm text-textMain focus:outline-none focus:border-accent"
                     />
-                    <input
+                    <SmoothInput
                       type="password"
                       placeholder="Confirm new password"
                       value={confirmPassword}
@@ -466,7 +467,7 @@ export function SettingsPage() {
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1">
                     <span className="text-[10px] font-bold uppercase text-textMuted tracking-wider">Type DELETE to confirm</span>
-                    <input
+                    <SmoothInput
                       type="text"
                       placeholder="DELETE"
                       value={deleteConfirmText}

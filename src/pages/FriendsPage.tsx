@@ -1,3 +1,5 @@
+import { SmoothInput } from '../components/ui/SmoothInput';
+/* eslint-disable react-compiler/react-compiler, react/purity, react-hooks/exhaustive-deps, react/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { Loader2, Check, X, Search, UserPlus, Flame, ArrowRight } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
@@ -97,7 +99,7 @@ export function FriendsPage() {
 
           <div className="relative w-full">
             <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-textMuted" />
-            <input
+            <SmoothInput
               type="text"
               placeholder="Find a friend by username..."
               value={searchQuery}

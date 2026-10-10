@@ -1,3 +1,4 @@
+import { SmoothInput } from '../components/ui/SmoothInput';
 import { useState } from 'react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -128,11 +129,11 @@ export function Login() {
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
+            <SmoothInput type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
           </div>
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
+            <SmoothInput type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
           </div>
 
           <button type="submit" disabled={loading || googleLoading} className="w-full bg-textMain text-background hover:bg-white font-semibold py-2.5 rounded-xl mt-4 transition-colors flex justify-center items-center h-11 disabled:opacity-50 disabled:hover:bg-textMain">

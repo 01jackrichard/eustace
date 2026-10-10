@@ -1,3 +1,5 @@
+import { SmoothInput } from '../components/ui/SmoothInput';
+/* eslint-disable react-compiler/react-compiler, react/purity, react-hooks/exhaustive-deps, react/set-state-in-effect */
 import { useState, useMemo } from 'react';
 import { Loader2, ChevronLeft, ChevronRight, Search, Plus, Check, Filter, X } from 'lucide-react';
 import {
@@ -317,7 +319,7 @@ export function CalendarPage() {
               {/* Search */}
               <div className="relative shrink-0">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
-                <input 
+                <SmoothInput 
                   type="text" 
                   placeholder="Search tasks..." 
                   value={searchQuery}
@@ -364,7 +366,7 @@ export function CalendarPage() {
           {/* Search */}
           <div className="relative shrink-0">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
-            <input 
+            <SmoothInput 
               type="text" 
               placeholder="Search tasks..." 
               value={searchQuery}

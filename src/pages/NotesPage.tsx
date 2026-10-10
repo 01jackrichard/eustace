@@ -1,3 +1,4 @@
+import { SmoothInput } from '../components/ui/SmoothInput';
 import { useState, useRef, useEffect } from 'react';
 import { useNotesData } from '../hooks/useNotesData';
 import { formatDistanceToNow } from 'date-fns';
@@ -182,7 +183,7 @@ export function NotesPage() {
           
           <div className="relative mt-2">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
-            <input
+            <SmoothInput
               ref={searchInputRef}
               type="text"
               placeholder="Search... (Ctrl+K)"
