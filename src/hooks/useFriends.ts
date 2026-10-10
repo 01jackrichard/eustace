@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { calculateStreakFromDates } from '../lib/dataManager';
 import toast from 'react-hot-toast';
 
 export type Profile = {
@@ -269,6 +268,7 @@ export function useFriends() {
     getFriendshipStatus
   };
 }
+
 
 
 
