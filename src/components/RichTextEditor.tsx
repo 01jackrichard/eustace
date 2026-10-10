@@ -160,35 +160,49 @@ const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: Reac
     if (!editor) return;
 
     const updateCaret = () => {
-      if (!editor.isFocused || !containerRef.current) {
-        caretOpacity.set(0);
-        return;
-      }
-
-      const { state, view } = editor;
-      const { selection } = state;
-      
-      if (!selection.empty) {
-        caretOpacity.set(0);
-        return;
-      }
-
-      try {
-        const coords = view.coordsAtPos(selection.head);
-        const wrapper = containerRef.current;
-        const rect = wrapper.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        if (!editor || editor.isDestroyed || !containerRef.current) return;
         
-        const relativeX = (coords.left - rect.left) + wrapper.scrollLeft;
-        const relativeY = (coords.top - rect.top) + wrapper.scrollTop;
-        const height = coords.bottom - coords.top;
+        // Safety check for focus. Sometimes in prod document.activeElement is safer
+        const isEditorFocused = editor.isFocused || (containerRef.current.contains(document.activeElement));
+        if (!isEditorFocused) {
+          caretOpacity.set(0);
+          return;
+        }
 
-        caretX.set(relativeX);
-        caretY.set(relativeY);
-        if (height > 0) caretHeight.set(height);
-        caretOpacity.set(1);
-      } catch (e) {
-        // Ignore if coords can't be resolved
-      }
+        const { state, view } = editor;
+        if (!state || !view) return;
+        
+        const { selection } = state;
+        
+        if (!selection || !selection.empty) {
+          caretOpacity.set(0);
+          return;
+        }
+
+        try {
+          const coords = view.coordsAtPos(selection.head);
+          if (!coords) return; // Strict null check
+
+          const wrapper = containerRef.current;
+          if (!wrapper) return;
+          
+          const rect = wrapper.getBoundingClientRect();
+          
+          const relativeX = (coords.left - rect.left) + wrapper.scrollLeft;
+          const relativeY = (coords.top - rect.top) + wrapper.scrollTop;
+          const height = coords.bottom - coords.top;
+
+          if (isNaN(relativeX) || isNaN(relativeY) || isNaN(height)) return;
+
+          caretX.set(relativeX);
+          caretY.set(relativeY);
+          if (height > 0) caretHeight.set(height);
+          caretOpacity.set(1);
+        } catch (e) {
+          // Ignore if coords can't be resolved
+        }
+      });
     };
 
     editor.on('transaction', updateCaret);
@@ -249,7 +263,8 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
     },
     editorProps: {
       attributes: {
-        class: 'caret-transparent prose prose-invert prose-accent max-w-none focus:outline-none min-h-[300px] text-base md:text-lg leading-relaxed',
+        class: 'prose prose-invert prose-accent max-w-none focus:outline-none min-h-[300px] text-base md:text-lg leading-relaxed',
+          style: 'caret-color: transparent;',
       },
     },
   });
