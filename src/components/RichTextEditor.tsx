@@ -160,35 +160,54 @@ const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: Reac
     if (!editor) return;
 
     const updateCaret = () => {
-      if (!editor.isFocused || !containerRef.current) {
-        caretOpacity.set(0);
-        return;
-      }
-
-      const { state, view } = editor;
-      const { selection } = state;
-      
-      if (!selection.empty) {
-        caretOpacity.set(0);
-        return;
-      }
-
-      try {
-        const coords = view.coordsAtPos(selection.head);
-        const wrapper = containerRef.current;
-        const rect = wrapper.getBoundingClientRect();
+      setTimeout(() => {
+        if (!editor || editor.isDestroyed || !containerRef.current) return;
         
-        const relativeX = (coords.left - rect.left) + wrapper.scrollLeft;
-        const relativeY = (coords.top - rect.top) + wrapper.scrollTop;
-        const height = coords.bottom - coords.top;
+        const { state, view } = editor;
+        if (!state || !view) return;
 
-        caretX.set(relativeX);
-        caretY.set(relativeY);
-        if (height > 0) caretHeight.set(height);
-        caretOpacity.set(1);
-      } catch (e) {
-        // Ignore if coords can't be resolved
-      }
+        // Use ProseMirror's native hasFocus() which is much more reliable in Prod than TipTap's isFocused
+        const isEditorFocused = view.hasFocus() || containerRef.current.contains(document.activeElement);
+        if (!isEditorFocused) {
+          caretOpacity.set(0);
+          return;
+        }
+        
+        const { selection } = state;
+        
+        if (!selection || !selection.empty) {
+          caretOpacity.set(0);
+          return;
+        }
+
+        try {
+          const coords = view.coordsAtPos(selection.head);
+          if (!coords) return; // Strict null check
+
+          const wrapper = containerRef.current;
+          if (!wrapper) return;
+          
+          const rect = wrapper.getBoundingClientRect();
+          
+          const relativeX = (coords.left - rect.left) + wrapper.scrollLeft;
+          const relativeY = (coords.top - rect.top) + wrapper.scrollTop;
+          
+          // Fallback height in case coordsAtPos returns 0 height on empty lines
+          let height = coords.bottom - coords.top;
+          if (height <= 0 || isNaN(height)) {
+             height = 24; // Sensible default for text-lg
+          }
+
+          if (isNaN(relativeX) || isNaN(relativeY)) return;
+
+          caretX.set(relativeX);
+          caretY.set(relativeY);
+          caretHeight.set(height);
+          caretOpacity.set(1);
+        } catch (e) {
+          // Ignore if coords can't be resolved
+        }
+      });
     };
 
     editor.on('transaction', updateCaret);
@@ -218,7 +237,7 @@ const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: Reac
 
   return (
     <motion.div
-      className="absolute top-0 left-0 w-[2px] bg-accent-500 rounded-full pointer-events-none z-50"
+      className="absolute top-0 left-0 w-[2px] bg-orange-500 rounded-full pointer-events-none z-50"
       style={{
         x: springX,
         y: springY,
@@ -249,7 +268,8 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
     },
     editorProps: {
       attributes: {
-        class: 'caret-transparent prose prose-invert prose-accent max-w-none focus:outline-none min-h-[300px] text-base md:text-lg leading-relaxed',
+        class: 'prose prose-invert prose-accent max-w-none focus:outline-none min-h-[300px] text-base md:text-lg leading-relaxed',
+          style: 'caret-color: transparent;',
       },
     },
   });
