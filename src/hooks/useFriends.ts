@@ -37,39 +37,16 @@ export function useFriends() {
   const [error, setError] = useState<DetailedError | null>(null);
   const [myStreak, setMyStreak] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (profile?.current_streak !== undefined) {
-      setMyStreak(profile.current_streak);
-    }
-  }, [profile?.current_streak]);
+  
 
   const fetchFriendships = useCallback(async () => {
     if (!user) return;
     setError(null);
     try {
-      let userStreak: number | null = profile?.current_streak ?? null;
-      if (!userStreak && user) {
+      if (user) {
         const { data: myStats } = await supabase.rpc('calculate_user_streak', { target_user_id: user.id });
-
-        if (typeof myStats === 'number' && myStats > 0) {
-          userStreak = myStats;
-        } else {
-          const { data: recentCompletions } = await supabase
-            .from('task_completions')
-            .select('completed_date')
-            .eq('user_id', user.id)
-            .order('completed_date', { ascending: false })
-            .limit(30);
-
-          if (recentCompletions) {
-            userStreak = calculateStreakFromDates(
-              recentCompletions.map(c => c.completed_date)
-            );
-            
-          }
-        }
+        setMyStreak(typeof myStats === 'number' ? myStats : 0);
       }
-      setMyStreak(userStreak ?? 0);
 
       const { data: rels, error: relsError } = await supabase
         .from('friendships')
@@ -292,5 +269,8 @@ export function useFriends() {
     getFriendshipStatus
   };
 }
+
+
+
 
 
