@@ -49,14 +49,10 @@ export function useFriends() {
     try {
       let userStreak: number | null = profile?.current_streak ?? null;
       if (!userStreak && user) {
-        const { data: myStats } = await supabase
-          .from('user_stats')
-          .select('current_streak')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        const { data: myStats } = await supabase.rpc('calculate_user_streak', { target_user_id: user.id });
 
-        if (myStats?.current_streak !== undefined && myStats.current_streak !== null && myStats.current_streak > 0) {
-          userStreak = myStats.current_streak;
+        if (typeof myStats === 'number' && myStats > 0) {
+          userStreak = myStats;
         } else {
           const { data: recentCompletions } = await supabase
             .from('task_completions')
@@ -296,4 +292,5 @@ export function useFriends() {
     getFriendshipStatus
   };
 }
+
 

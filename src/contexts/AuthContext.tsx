@@ -63,11 +63,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const [profileRes, statsRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
-        supabase.from('user_stats').select('current_streak').eq('user_id', userId).maybeSingle()
+        supabase.rpc('calculate_user_streak', { target_user_id: userId })
       ]);
 
       if (!profileRes.error && profileRes.data) {
-        let currentStreak = statsRes.data?.current_streak ?? 0;
+        let currentStreak = typeof statsRes.data === 'number' ? statsRes.data : (statsRes.data?.current_streak ?? 0);
 
         if (currentStreak === 0) {
           const { data: completions } = await supabase
@@ -149,5 +149,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
 
 
