@@ -1,3 +1,4 @@
+import { SmoothInput } from '../components/ui/SmoothInput';
 /* eslint-disable react-compiler/react-compiler, react/purity, react-hooks/exhaustive-deps, react/set-state-in-effect */
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Loader2, ChevronLeft, ChevronRight, ChevronDown, Check, Search } from 'lucide-react';
@@ -291,7 +292,7 @@ export function CalendarPage() {
                       <div className="p-2 border-b border-border/40 shrink-0">
                         <div className="relative">
                           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
-                          <input
+                          <SmoothInput
                             type="text"
                             placeholder="Find task..."
                             value={filterSearch}

@@ -1,3 +1,4 @@
+import { SmoothInput } from './ui/SmoothInput';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -245,7 +246,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
           <div className="flex flex-col gap-8">
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted">Display Name</label>
-              <input
+              <SmoothInput
                 type="text"
                 className="w-full bg-transparent border-b border-border/30 pb-2 text-lg font-bold text-textMain focus:outline-none focus:border-accent transition-colors"
                 value={displayName}
@@ -258,7 +259,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
               <label className="text-[10px] font-bold tracking-[0.2em] uppercase text-textMuted">Username</label>
               <div className="relative w-full">
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 text-textMuted font-bold">@</span>
-                <input
+                <SmoothInput
                   type="text"
                   className={cn(
                     "w-full bg-transparent border-b border-border/30 pb-2 pl-6 text-lg font-bold text-textMain focus:outline-none transition-colors",

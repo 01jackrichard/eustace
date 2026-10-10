@@ -1,3 +1,4 @@
+import { SmoothInput } from '../components/ui/SmoothInput';
 /* eslint-disable react-compiler/react-compiler, react/purity, react-hooks/exhaustive-deps, react/set-state-in-effect */
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -381,7 +382,7 @@ export function FriendsPage() {
       <div className="flex flex-col gap-4">
         <div className="relative w-full">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-textMuted"><Search size={18} /></span>
-          <input
+          <SmoothInput
             type="text"
             className="w-full bg-surface border border-border/30 rounded-xl py-4 pl-12 pr-4 text-sm font-bold text-textMain focus:outline-none focus:border-accent transition-colors"
             placeholder="Search by @username..."

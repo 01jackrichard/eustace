@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useNotesData, type Note } from '../hooks/useNotesData';
 import { supabase } from '../lib/supabase';
 import { RichTextEditor } from '../components/RichTextEditor';
-import { SmoothInput } from '../components/ui/skiper-ui/skiper106';
+import TextareaAutosize from 'react-textarea-autosize';
 import { ArrowLeft, Pin, MoreVertical, Folder, Trash2, Tag, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
@@ -211,13 +211,13 @@ export function NoteEditorPage() {
       </div>
 
       {/* Editor Area */}
-      <div className="flex flex-col gap-6 flex-1 pb-32 max-w-4xl">
-        <SmoothInput
-            value={title}
-            onChange={handleTitleChange}
-            placeholder="Note Title"
-            className="w-full bg-transparent text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-textMain placeholder-textMuted/30 outline-none resize-none leading-tight border-none p-0 focus:ring-0"
-          />
+      <div className="flex flex-col gap-6 flex-1 pb-32 w-full">
+        <TextareaAutosize
+          value={title}
+          onChange={handleTitleChange}
+          placeholder="Note Title"
+          className="w-full bg-transparent text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-textMain placeholder-textMuted/30 outline-none resize-none leading-tight border-none p-0 focus:ring-0"
+        />
         
         {/* Tags UI */}
         {note?.tags && note.tags.length > 0 && (

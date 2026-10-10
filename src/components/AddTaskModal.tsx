@@ -1,3 +1,4 @@
+import { SmoothInput } from './ui/SmoothInput';
 import { useState, useEffect, useRef } from 'react';
 import { X, Check } from 'lucide-react';
 import { format } from 'date-fns';
@@ -112,7 +113,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
 
         <form id="task-form" onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-6">
           <div className="space-y-4">
-            <input
+            <SmoothInput
               type="text"
               placeholder="What needs to be done?"
               value={name}
@@ -121,7 +122,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
               autoFocus
             />
 
-            <input
+            <SmoothInput
               type="text"
               placeholder="Category (optional)"
               value={category}
@@ -146,7 +147,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
 
             {hasTime && (
               <div className="flex items-center gap-4 pl-8 animate-in fade-in slide-in-from-top-2 duration-200">
-                <input
+                <SmoothInput
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
@@ -154,7 +155,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                   required
                 />
                 <span className="text-textMuted text-sm">to</span>
-                <input
+                <SmoothInput
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
@@ -200,7 +201,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
               <div className="flex flex-col gap-2 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] font-bold tracking-widest text-textMuted uppercase w-20">Ends</span>
-                  <input
+                  <SmoothInput
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}

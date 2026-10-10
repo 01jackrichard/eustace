@@ -1,3 +1,4 @@
+import { SmoothInput } from './ui/SmoothInput';
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '../lib/utils';
 import { X, Loader2 } from 'lucide-react';
@@ -86,7 +87,7 @@ export function FolderModal({
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-textMain">Folder name</label>
-          <input
+          <SmoothInput
             ref={inputRef}
             type="text"
             value={name}
@@ -288,7 +289,7 @@ export function EditTagsModal({
       <div className="flex flex-col gap-4">
         <form onSubmit={handleAdd} className="flex flex-col gap-2">
           <label className="text-sm font-medium text-textMain">Add tag</label>
-          <input
+          <SmoothInput
             ref={inputRef}
             type="text"
             value={input}
