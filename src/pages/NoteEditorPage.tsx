@@ -144,7 +144,7 @@ export function NoteEditorPage() {
   if (noteLoading || !note) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-textMuted flex-1 h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
       </div>
     );
   }
@@ -176,7 +176,7 @@ export function NoteEditorPage() {
             onClick={handleTogglePin}
             className={cn(
               "p-2 rounded-lg transition-colors",
-              note.is_pinned ? "text-orange-500 bg-orange-500/10" : "text-textMuted hover:text-textMain hover:bg-[#111111]"
+              note.is_pinned ? "text-accent bg-accent/10" : "text-textMuted hover:text-textMain hover:bg-[#111111]"
             )}
             title={note.is_pinned ? "Unpin" : "Pin"}
           >
@@ -223,7 +223,7 @@ export function NoteEditorPage() {
         {note?.tags && note.tags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {note.tags.map(tag => (
-              <span key={tag} className="flex items-center gap-1 bg-orange-500/10 text-orange-500 px-2.5 py-1 rounded-md text-xs font-semibold">
+              <span key={tag} className="flex items-center gap-1 bg-accent/10 text-accent px-2.5 py-1 rounded-md text-xs font-semibold">
                 #{tag}
               </span>
             ))}
@@ -249,7 +249,7 @@ export function NoteEditorPage() {
                   to={`/notes/${b.id}`}
                   className="group flex items-center justify-between p-3 rounded-xl bg-[#111111]/50 hover:bg-[#111111] border border-transparent hover:border-border/40 transition-colors"
                 >
-                  <span className="text-sm font-medium text-textMain group-hover:text-orange-500 transition-colors truncate">
+                  <span className="text-sm font-medium text-textMain group-hover:text-accent transition-colors truncate">
                     {b.title}
                   </span>
                   <span className="text-xs text-textMuted/50">

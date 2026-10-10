@@ -94,11 +94,17 @@
 .tiptap {
   outline: none;
 }
-.prose-orange :where(a):not(:where([class~="not-prose"] *)) {
-  color: #FF5722;
+.prose-accent :where(a):not(:where([class~="not-prose"] *)) {
+  color: #22c55e;
   text-decoration: underline;
 }
-.prose-orange :where(strong):not(:where([class~="not-prose"] *)) {
+.prose-accent :where(strong):not(:where([class~="not-prose"] *)) {
   color: #fff;
+}
+
+@layer base {
+  button {
+    @apply transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50;
+  }
 }
 

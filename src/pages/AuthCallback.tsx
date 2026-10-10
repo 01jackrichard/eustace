@@ -71,7 +71,7 @@ export function AuthCallback() {
     return () => {
       mounted = false;
     };
-  }, [navigate]);
+  }, [navigate, status]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background animate-fade-in">

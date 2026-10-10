@@ -11,6 +11,8 @@ export type TaskMetadata = {
   endDate?: string;
   startTime?: string; // HH:mm format
   endTime?: string; // HH:mm format
+  icon?: string;
+  iconColor?: string;
 };
 
 export type Task = {

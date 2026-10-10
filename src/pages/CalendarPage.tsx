@@ -1,43 +1,63 @@
 import { SmoothInput } from '../components/ui/SmoothInput';
 /* eslint-disable react-compiler/react-compiler, react/purity, react-hooks/exhaustive-deps, react/set-state-in-effect */
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, ChevronDown, Check, Search } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Loader2, ChevronLeft, ChevronRight, Search, Plus, Check, Filter, X } from 'lucide-react';
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval,
   isSameMonth, isSameDay, isToday, startOfWeek, endOfWeek,
   subYears, addYears, eachMonthOfInterval, startOfYear, endOfYear,
-  parseISO, differenceInDays, startOfDay
+  addDays, subDays
 } from 'date-fns';
 import { cn } from '../lib/utils';
 import { useProductivityData } from '../hooks/useProductivityData';
 import { DayPlanner } from '../components/DayPlanner';
+import { AddTaskModal } from '../components/AddTaskModal';
+import { getTasksForDate, parseTaskMetadata } from '../lib/dataManager';
+import type { Task } from '../lib/dataManager';
+import * as Icons from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function CalendarPage() {
-  const [view, setView] = useState<'month' | 'year' | 'day'>('month');
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [selectedTaskId, setSelectedTaskId] = useState<string>('ALL');
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [view, setView] = useState<'day' | 'month' | 'year'>('month');
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set(['ALL']));
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filterSearch, setFilterSearch] = useState('');
-  const filterRef = useRef<HTMLDivElement>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [moreTasksDate, setMoreTasksDate] = useState<Date | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const hook = useProductivityData(currentDate.getFullYear());
   const { data, loading } = hook;
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
-        setIsFilterOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const handlePrev = () => {
+    if (view === 'year') setCurrentDate(prev => subYears(prev, 1));
+    else if (view === 'month') setCurrentDate(prev => startOfMonth(subMonths(prev, 1)));
+    else if (view === 'day') {
+      const prevDay = subDays(selectedDate, 1);
+      setCurrentDate(prevDay);
+      setSelectedDate(prevDay);
+    }
+  };
+  
+  const handleNext = () => {
+    if (view === 'year') setCurrentDate(prev => addYears(prev, 1));
+    else if (view === 'month') setCurrentDate(prev => startOfMonth(addMonths(prev, 1)));
+    else if (view === 'day') {
+      const nextDay = addDays(selectedDate, 1);
+      setCurrentDate(nextDay);
+      setSelectedDate(nextDay);
+    }
+  };
 
-  const handlePrev = () => setCurrentDate(prev => view === 'year' ? subYears(prev, 1) : subMonths(prev, 1));
-  const handleNext = () => setCurrentDate(prev => view === 'year' ? addYears(prev, 1) : addMonths(prev, 1));
+  const handleSetToday = () => {
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedDate(today);
+  };
 
-  // Extract all unique tasks for the filter
+  // Build task list
   const allTasks = useMemo(() => {
     if (!data) return [];
     const tasksMap = new Map();
@@ -48,68 +68,73 @@ export function CalendarPage() {
     return Array.from(tasksMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [data]);
 
-  const selectedTaskName = useMemo(() => {
-    if (selectedTaskId === 'ALL') return 'ALL TASKS';
-    return allTasks.find(t => t.id === selectedTaskId)?.name || 'UNKNOWN TASK';
-  }, [selectedTaskId, allTasks]);
-
-  const filteredTasks = useMemo(() => {
-    if (!filterSearch) return allTasks;
-    return allTasks.filter(t => t.name.toLowerCase().includes(filterSearch.toLowerCase()));
-  }, [allTasks, filterSearch]);
-
-  // Aggregate completions by date
-  const completionsByDate = useMemo(() => {
-    const map = new Map<string, string[]>();
-    if (!data) return map;
-
-    Object.entries(data.days).forEach(([dateStr, dayData]) => {
-      const completed = dayData.completedTaskIds;
-      if (completed.length > 0) {
-        if (selectedTaskId === 'ALL') {
-          map.set(dateStr, completed);
-        } else if (completed.includes(selectedTaskId)) {
-          map.set(dateStr, [selectedTaskId]);
-        }
-      }
-    });
-    return map;
-  }, [data, selectedTaskId]);
-
-  const yearStats = useMemo(() => {
-    if (view !== 'year') return null;
-    const sortedDates = Array.from(completionsByDate.keys()).sort();
-    const completedDays = sortedDates.length;
-
-    let currentStreak = 0;
-    let bestStreak = 0;
-    let tempStreak = 0;
-    let lastDate: Date | null = null;
-
-    for (const dateStr of sortedDates) {
-      const date = parseISO(dateStr);
-      if (!lastDate) {
-        tempStreak = 1;
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTasks(prev => {
+      const next = new Set(prev);
+      if (taskId === 'ALL') {
+        next.clear();
+        next.add('ALL');
       } else {
-        const diff = differenceInDays(date, lastDate);
-        if (diff === 1) {
-          tempStreak++;
-        } else if (diff > 1) {
-          if (tempStreak > bestStreak) bestStreak = tempStreak;
-          tempStreak = 1;
+        next.delete('ALL');
+        if (next.has(taskId)) {
+          next.delete(taskId);
+          if (next.size === 0) next.add('ALL');
+        } else {
+          next.add(taskId);
         }
       }
-      lastDate = date;
-    }
-    if (tempStreak > bestStreak) bestStreak = tempStreak;
+      return next;
+    });
+  };
 
-    if (lastDate) {
-      const diffToToday = differenceInDays(startOfDay(new Date()), startOfDay(lastDate));
-      if (diffToToday <= 1) currentStreak = tempStreak;
-    }
+  const renderMiniCalendar = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const startDate = startOfWeek(monthStart);
+    const endDate = endOfWeek(monthEnd);
+    const days = eachDayOfInterval({ start: startDate, end: endDate });
+    const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-    return { completedDays, currentStreak, bestStreak };
-  }, [completionsByDate, view]);
+    return (
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-4 px-1">
+          <div className="text-sm font-bold text-textMain tracking-wide">{format(currentDate, 'MMMM yyyy')}</div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setCurrentDate(startOfMonth(subMonths(currentDate, 1)))} className="text-textMuted hover:text-textMain"><ChevronLeft size={16}/></button>
+            <button onClick={() => setCurrentDate(startOfMonth(addMonths(currentDate, 1)))} className="text-textMuted hover:text-textMain"><ChevronRight size={16}/></button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 mb-2">
+          {weekDays.map((d, i) => <div key={i} className="text-center text-[10px] font-bold text-textMuted">{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-y-1">
+          {days.map(day => {
+            const isCurrentMonth = isSameMonth(day, currentDate);
+            const isSelected = isSameDay(day, selectedDate);
+            const isDayToday = isToday(day);
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => {
+                  setSelectedDate(day);
+                  setCurrentDate(day);
+                }}
+                className={cn(
+                  "h-7 w-7 rounded-full mx-auto flex items-center justify-center text-xs transition-colors",
+                  !isCurrentMonth && "opacity-30",
+                  isSelected && "bg-accent text-background font-bold",
+                  isDayToday && !isSelected && "bg-surface text-accent font-bold ring-1 ring-inset ring-accent/30",
+                  !isSelected && !isDayToday && "hover:bg-surface text-textMain"
+                )}
+              >
+                {format(day, 'd')}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const renderMonthGrid = () => {
     const monthStart = startOfMonth(currentDate);
@@ -117,63 +142,100 @@ export function CalendarPage() {
     const startDate = startOfWeek(monthStart);
     const endDate = endOfWeek(monthEnd);
     const days = eachDayOfInterval({ start: startDate, end: endDate });
-    const weekDays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     return (
-      <div className="w-full animate-in fade-in duration-300">
-        <div className="grid grid-cols-7 mb-4">
+      <div className="flex flex-col h-full bg-background">
+        <div className="grid grid-cols-7 border-b border-border/40 shrink-0">
           {weekDays.map(day => (
-            <div key={day} className="text-center text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase">
+            <div key={day} className="py-2 text-center text-[11px] font-semibold text-textMuted uppercase tracking-wider">
               {day}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1 md:gap-2">
+        <div 
+          className="flex-1 grid grid-cols-7 gap-px bg-border/40 overflow-y-auto"
+          style={{ gridTemplateRows: `repeat(${days.length / 7}, minmax(100px, 1fr))` }}
+        >
           {days.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
-            const dayCompletions = completionsByDate.get(dateStr) || [];
-            const isSelected = selectedDate && isSameDay(day, selectedDate);
+            const dayTasks = data ? getTasksForDate(data, dateStr) : [];
+            const dayCompletions = data?.days[dateStr]?.completedTaskIds || [];
             const isCurrentMonth = isSameMonth(day, currentDate);
+            const isSelected = isSameDay(day, selectedDate);
             const isDayToday = isToday(day);
-
-            let marker = null;
-
-            if (selectedTaskId === 'ALL') {
-              const count = dayCompletions.length;
-              if (count > 0) {
-                let opacity = 'opacity-20';
-                if (count > 2) opacity = 'opacity-50';
-                if (count > 4) opacity = 'opacity-90';
-                marker = <div className={cn("absolute inset-2 md:inset-3 rounded-md bg-accent mix-blend-screen transition-opacity", opacity)} />;
-              }
-            } else {
-              if (dayCompletions.length > 0) {
-                marker = <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-accent shadow-[0_0_8px_rgba(34,197,94,0.4)]" />;
-              }
-            }
+            
+            // Filter tasks for chips based on selected left-panel filter
+            const filteredByPanel = dayTasks.filter(t => selectedTasks.has('ALL') || selectedTasks.has(t.id));
+            const completedTasks = filteredByPanel.filter(t => dayCompletions.includes(t.id));
 
             return (
-              <button
+              <div
                 key={dateStr}
                 onClick={() => {
                   setSelectedDate(day);
+                  setCurrentDate(day);
                   setView('day');
                 }}
                 className={cn(
-                  "relative flex flex-col items-center justify-start p-2 aspect-square md:aspect-auto md:h-20 lg:h-24 rounded-lg border transition-all duration-200 overflow-hidden group",
-                  !isCurrentMonth ? "opacity-20 border-transparent hover:opacity-50" : "bg-surface border-border/40 hover:border-border/80 cursor-pointer",
-                  isSelected && "ring-1 ring-accent border-transparent",
-                  isDayToday && !isSelected && "border-textMuted/40"
+                  "bg-background p-1.5 md:p-2 flex flex-col gap-1 cursor-pointer hover:bg-surface/30 transition-colors group relative min-h-0",
+                  !isCurrentMonth && "opacity-60",
+                  isSelected && "ring-1 ring-inset ring-accent z-10"
                 )}
               >
-                <span className={cn(
-                  "text-xs md:text-sm font-medium z-10",
-                  !isCurrentMonth ? "text-textMuted" : (isDayToday ? "text-accent font-bold" : "text-textMain")
-                )}>
-                  {format(day, 'd')}
-                </span>
-                {marker}
-              </button>
+                <div className="flex justify-start items-center mb-1 shrink-0">
+                  <div className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+                    isDayToday ? "bg-accent text-background font-bold" : "text-textMain",
+                    !isCurrentMonth && !isDayToday && "text-textMuted"
+                  )}>
+                    {format(day, 'd')}
+                  </div>
+                </div>
+                
+                {/* Task Bars */}
+                <div className="flex flex-col gap-[3px] overflow-hidden flex-1 mt-0">
+                  {completedTasks.slice(0, 2).map(task => {
+                    const meta = parseTaskMetadata(task);
+
+                    return (
+                      <div 
+                        key={task.id} 
+                        className="relative flex flex-col justify-center px-2 py-1 rounded-[4px] overflow-hidden transition-colors shrink-0 max-w-full text-left bg-surface/40 text-textMain hover:bg-surface/80"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTask(task);
+                        }}
+                      >
+                        {/* Left accent stripe */}
+                        <div className="absolute left-0 top-0 bottom-0 w-[2.5px] bg-accent/70" />
+
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="truncate text-[11px] font-medium leading-tight">
+                            {task.name}
+                          </span>
+                        </div>
+                        {meta.startTime && (
+                          <span className="truncate text-[9.5px] text-textMuted leading-tight mt-[1px]">
+                            {meta.startTime}{meta.endTime ? `–${meta.endTime}` : ''}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {completedTasks.length > 2 && (
+                    <button 
+                      className="text-[10px] md:text-[11px] text-textMuted font-medium px-1.5 py-0.5 hover:text-textMain hover:bg-surface/50 rounded-[4px] transition-colors shrink-0 max-w-full text-left truncate"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMoreTasksDate(day);
+                      }}
+                    >
+                      +{completedTasks.length - 2} more
+                    </button>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -182,229 +244,367 @@ export function CalendarPage() {
   };
 
   const renderYearGrid = () => {
+    // We'll keep the Year view compact and history-focused
     const months = eachMonthOfInterval({ start: startOfYear(currentDate), end: endOfYear(currentDate) });
 
     return (
-      <div className="w-full animate-in fade-in duration-300">
-        {yearStats && (
-          <div className="flex flex-wrap gap-6 md:gap-12 mb-10 pb-6 border-b border-border/40">
-            <div>
-              <div className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase mb-1">Completed Days</div>
-              <div className="text-2xl font-black text-textMain">{yearStats.completedDays}</div>
-            </div>
-            {selectedTaskId !== 'ALL' && (
-              <>
-                <div>
-                  <div className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase mb-1">Current Streak</div>
-                  <div className="text-2xl font-black text-textMain">{yearStats.currentStreak} <span className="text-sm font-normal text-textMuted ml-1">days</span></div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase mb-1">Best Streak</div>
-                  <div className="text-2xl font-black text-textMain">{yearStats.bestStreak} <span className="text-sm font-normal text-textMuted ml-1">days</span></div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+      <div className="absolute inset-0 overflow-y-auto" ref={(el) => { if (el) el.scrollTop = 0; }}>
+        <div className="w-full p-4 md:p-6 lg:p-8 animate-in fade-in duration-300 max-w-6xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            {months.map(monthDate => {
+              const mStart = startOfMonth(monthDate);
+              const mEnd = endOfMonth(monthDate);
+              const mDays = eachDayOfInterval({ start: startOfWeek(mStart), end: endOfWeek(mEnd) });
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-12">
-          {months.map(monthDate => {
-            const mStart = startOfMonth(monthDate);
-            const mEnd = endOfMonth(monthDate);
-            const mDays = eachDayOfInterval({ start: startOfWeek(mStart), end: endOfWeek(mEnd) });
-
-            return (
-              <button
-                key={monthDate.toString()}
-                className="flex flex-col group cursor-pointer text-left"
-                onClick={() => {
-                  setCurrentDate(monthDate);
-                  setView('month');
-                }}
-              >
-                <h3 className="text-[11px] font-bold tracking-[0.2em] text-textMuted uppercase mb-3 group-hover:text-textMain transition-colors">
-                  {format(monthDate, 'MMMM')}
-                </h3>
-                <div className="grid grid-cols-7 gap-1 w-full max-w-[200px]">
-                  {mDays.map(day => {
-                    const dateStr = format(day, 'yyyy-MM-dd');
-                    const dayCompletions = completionsByDate.get(dateStr) || [];
-                    const isCurrentMonth = isSameMonth(day, monthDate);
-
-                    let bg = 'bg-transparent';
-                    if (isCurrentMonth) {
-                      bg = 'bg-border/40';
-                      if (selectedTaskId === 'ALL') {
-                        const count = dayCompletions.length;
-                        if (count === 1) bg = 'bg-accent/30';
-                        else if (count <= 3) bg = 'bg-accent/60';
-                        else if (count > 3) bg = 'bg-accent';
-                      } else if (dayCompletions.length > 0) {
-                        bg = 'bg-accent';
+              return (
+                <button
+                  key={monthDate.toString()}
+                  className="flex flex-col group cursor-pointer text-left bg-surface/20 p-3 md:p-4 rounded-xl border border-border/40 hover:border-border/80 transition-colors"
+                  onClick={() => {
+                    setCurrentDate(monthDate);
+                    setView('month');
+                  }}
+                >
+                  <h3 className="text-[10px] md:text-xs font-bold tracking-[0.2em] text-textMain uppercase mb-3">
+                    {format(monthDate, 'MMMM')}
+                  </h3>
+                  <div className="grid grid-cols-7 gap-0.5 w-full">
+                    {mDays.map(day => {
+                      const dateStr = format(day, 'yyyy-MM-dd');
+                      const dayCompletions = data?.days[dateStr]?.completedTaskIds || [];
+                      const isCurrentMonth = isSameMonth(day, monthDate);
+                      
+                      let bg = 'bg-transparent';
+                      if (isCurrentMonth) {
+                        bg = 'bg-border/30';
+                        if (dayCompletions.length > 0) {
+                          bg = 'bg-accent/40';
+                          if (dayCompletions.length > 2) bg = 'bg-accent/70';
+                          if (dayCompletions.length > 4) bg = 'bg-accent';
+                        }
                       }
-                    }
 
-                    return (
-                      <div
-                        key={dateStr}
-                        className={cn(
-                          "aspect-square rounded-[2px]",
-                          bg,
-                          isCurrentMonth && bg === 'bg-border/40' && "group-hover:bg-border/80 transition-colors"
-                        )}
-                      />
-                    );
-                  })}
-                </div>
-              </button>
-            );
-          })}
+                      return (
+                        <div
+                          key={dateStr}
+                          className={cn(
+                            "aspect-square rounded-[2px]",
+                            bg,
+                            isCurrentMonth && bg === 'bg-border/30' && "group-hover:bg-border/60 transition-colors"
+                          )}
+                        />
+                      );
+                    })}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="animate-fade-in min-h-[100dvh] pb-24 flex flex-col">
-      {/* TOP CONTROLS ROW */}
-      <div className="max-w-[1400px] w-full mx-auto px-4 md:px-8 pt-6 md:pt-10 flex-shrink-0">
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 md:mb-12">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-textMain uppercase">CALENDAR</h1>
-            <p className="text-textMuted mt-2 text-sm leading-relaxed">Your completion history.</p>
-          </div>
+    <div className="-mx-4 md:-mx-8 -mt-4 md:-mt-8 -mb-4 md:-mb-8 h-[calc(100dvh-56px-60px)] md:h-[100dvh] flex flex-col md:flex-row bg-background">
+      
+              {/* MOBILE FILTER BUTTON & DRAWER */}
+        {isFilterOpen && (
+          <div className="md:hidden fixed inset-0 z-[100] flex flex-col bg-background/95 backdrop-blur-xl animate-in fade-in duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-border/40 shrink-0 pt-[calc(16px+env(safe-area-inset-top))]">
+              <h2 className="text-sm font-bold tracking-widest uppercase text-textMain">Calendar Filters</h2>
+              <button onClick={() => setIsFilterOpen(false)} className="p-2 bg-surface/50 rounded-full text-textMuted hover:text-textMain transition-colors"><X size={18} /></button>
+            </div>
+            <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-6 pb-[env(safe-area-inset-bottom)]">
+              {/* Search */}
+              <div className="relative shrink-0">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+                <SmoothInput 
+                  type="text" 
+                  placeholder="Search tasks..." 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full bg-surface border border-border/60 rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-accent text-textMain shadow-sm"
+                />
+              </div>
 
-          {view !== 'day' && (
-            <div className="flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
-              {/* TASK FILTER POPOVER */}
-              <div className="relative z-30" ref={filterRef}>
-                <button
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className="w-48 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-surface border border-border/60 hover:border-textMuted/40 transition-all text-sm font-bold text-textMain tracking-wide shadow-sm"
-                >
-                  <span className="truncate">{selectedTaskName}</span>
-                  <ChevronDown size={14} className={cn("text-textMuted transition-transform shrink-0", isFilterOpen && "rotate-180")} />
-                </button>
-
-                {isFilterOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-64 max-h-[50vh] flex flex-col bg-surface border border-border/80 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                    {allTasks.length > 5 && (
-                      <div className="p-2 border-b border-border/40 shrink-0">
-                        <div className="relative">
-                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
-                          <SmoothInput
-                            type="text"
-                            placeholder="Find task..."
-                            value={filterSearch}
-                            onChange={(e) => setFilterSearch(e.target.value)}
-                            className="w-full bg-background border border-border/60 rounded-lg pl-9 pr-3 py-2 text-xs text-textMain placeholder:text-textMuted/50 focus:outline-none focus:border-textMuted"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    <div className="overflow-y-auto flex-1 p-1">
-                      <button
-                        onClick={() => { setSelectedTaskId('ALL'); setIsFilterOpen(false); setFilterSearch(''); }}
-                        className={cn(
-                          "w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold tracking-wide flex items-center justify-between transition-colors",
-                          selectedTaskId === 'ALL' ? "bg-background text-textMain" : "text-textMuted hover:bg-white/5 hover:text-textMain"
-                        )}
-                      >
-                        ALL TASKS
-                        {selectedTaskId === 'ALL' && <Check size={14} className="text-accent" />}
-                      </button>
-                      <div className="h-px bg-border/40 mx-2 my-1 shrink-0" />
-                      {filteredTasks.map(t => (
-                        <button
-                          key={t.id}
-                          onClick={() => { setSelectedTaskId(t.id); setIsFilterOpen(false); setFilterSearch(''); }}
-                          className={cn(
-                            "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-colors",
-                            selectedTaskId === t.id ? "bg-background text-textMain font-bold" : "text-textMuted hover:bg-white/5 hover:text-textMain"
-                          )}
-                        >
-                          <span className="truncate pr-4">{t.name}</span>
-                          {selectedTaskId === t.id && <Check size={14} className="text-accent shrink-0" />}
-                        </button>
-                      ))}
+              {/* Task Filters */}
+              <div className="flex-1 min-h-0 flex flex-col">
+                <h3 className="text-xs font-bold text-textMain mb-3 px-1 uppercase tracking-wider">My Tasks</h3>
+                <div className="flex-1 overflow-y-auto pr-2 space-y-1">
+                  <button
+                    onClick={() => toggleTaskSelection('ALL')}
+                    className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
+                  >
+                    <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
+                      {selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* MONTH / YEAR SWITCH */}
-              <div className="flex items-center bg-surface border border-border/60 rounded-xl p-1 shadow-sm">
-                <button
-                  onClick={() => setView('month')}
-                  className={cn(
-                    "px-4 py-1.5 rounded-lg text-[11px] font-bold tracking-widest transition-all",
-                    view === 'month' ? "bg-background text-textMain shadow-sm border border-border/40" : "text-textMuted hover:text-textMain"
-                  )}
-                >
-                  MONTH
-                </button>
-                <button
-                  onClick={() => setView('year')}
-                  className={cn(
-                    "px-4 py-1.5 rounded-lg text-[11px] font-bold tracking-widest transition-all",
-                    view === 'year' ? "bg-background text-textMain shadow-sm border border-border/40" : "text-textMuted hover:text-textMain"
-                  )}
-                >
-                  YEAR
-                </button>
-              </div>
-
-              {/* DATE NAVIGATION */}
-              <div className="flex items-center justify-between bg-surface px-2 py-1.5 rounded-xl border border-border/60 shadow-sm">
-                <button onClick={handlePrev} className="p-1.5 text-textMuted hover:text-textMain hover:bg-white/5 transition-colors rounded-lg">
-                  <ChevronLeft size={16} />
-                </button>
-                <div className="w-32 text-center font-bold text-xs tracking-widest text-textMain select-none uppercase">
-                  {view === 'month' ? format(currentDate, 'MMMM yyyy') : format(currentDate, 'yyyy')}
+                    <span className="text-sm font-medium text-textMain truncate">All Tasks</span>
+                  </button>
+                  {allTasks.map(task => (
+                    <button
+                      key={task.id}
+                      onClick={() => toggleTaskSelection(task.id)}
+                      className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
+                    >
+                      <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has(task.id) && !selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
+                        {selectedTasks.has(task.id) && !selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
+                      </div>
+                      <span className="text-sm text-textMuted truncate">{task.name}</span>
+                    </button>
+                  ))}
                 </div>
-                <button onClick={handleNext} className="p-1.5 text-textMuted hover:text-textMain hover:bg-white/5 transition-colors rounded-lg">
-                  <ChevronRight size={16} />
-                </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
+
+        {/* DESKTOP LEFT PANEL */}
+        <div className="hidden md:flex flex-col w-[260px] flex-shrink-0 border-r border-border/40 p-6 gap-6 overflow-y-auto bg-surface/10">
+          <h1 className="text-2xl font-black text-textMain tracking-tight">CALENDAR</h1>
+          
+          {/* Search */}
+          <div className="relative shrink-0">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+            <SmoothInput 
+              type="text" 
+              placeholder="Search tasks..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full bg-surface border border-border/60 rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-accent text-textMain shadow-sm"
+            />
+          </div>
+
+          {/* Mini Calendar */}
+          <div className="shrink-0">
+            {renderMiniCalendar()}
+          </div>
+
+          {/* Task Filters / My Calendars */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <h3 className="text-xs font-bold text-textMain mb-3 px-1 uppercase tracking-wider">My Tasks</h3>
+            <div className="flex-1 overflow-y-auto pr-2 space-y-1 scrollbar-thin">
+              <button
+                onClick={() => toggleTaskSelection('ALL')}
+                className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
+              >
+                <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
+                  {selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
+                </div>
+                <span className="text-sm font-medium text-textMain truncate">All Tasks</span>
+              </button>
+              {allTasks.map(task => (
+                <button
+                  key={task.id}
+                  onClick={() => toggleTaskSelection(task.id)}
+                  className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-surface text-left transition-colors group"
+                >
+                  <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors", selectedTasks.has(task.id) && !selectedTasks.has('ALL') ? "bg-accent border-accent" : "border-border group-hover:border-textMuted")}>
+                    {selectedTasks.has(task.id) && !selectedTasks.has('ALL') && <Check size={12} className="text-background" />}
+                  </div>
+                  <span className="text-sm text-textMuted truncate">{task.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Add Task Button */}
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="w-full bg-accent text-background hover:bg-accent/90 transition-colors py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold shadow-md shrink-0"
+          >
+            <Plus size={16} />
+            Add Task
+          </button>
+        </div>
+{/* MAIN AREA */}
+      <div className="flex-1 flex flex-col min-w-0 bg-background relative h-full overflow-hidden">
+        {loading && (
+          <div className="absolute inset-0 z-50 bg-background/50 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-accent" />
+          </div>
+        )}
+        
+        {/* TOOLBAR */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 md:p-4 border-b border-border/40 shrink-0 gap-4 sm:gap-0">
+          <div className="flex items-center gap-3 md:gap-6 w-full sm:w-auto justify-between sm:justify-start">
+            <h2 className="text-lg md:text-xl font-bold text-textMain min-w-[120px] md:min-w-[160px]">
+              {view === 'day' ? format(selectedDate, 'MMM d, yyyy') : view === 'year' ? format(currentDate, 'yyyy') : format(currentDate, 'MMMM yyyy')}
+            </h2>
+            <div className="flex items-center gap-1 md:gap-2">
+                <button onClick={() => setIsFilterOpen(true)} className="md:hidden p-1.5 rounded-md border border-border/60 hover:bg-surface transition-all text-textMain"><Filter size={18}/></button>
+              <button onClick={handleSetToday} className="px-3 py-1.5 text-xs font-bold border border-border/60 rounded-md hover:bg-surface transition-colors hidden md:block uppercase tracking-wider">
+                Today
+              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={handlePrev} className="p-1.5 rounded-md border border-transparent hover:border-border/60 hover:bg-surface transition-all"><ChevronLeft size={18}/></button>
+                <button onClick={handleNext} className="p-1.5 rounded-md border border-transparent hover:border-border/60 hover:bg-surface transition-all"><ChevronRight size={18}/></button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="relative flex w-full sm:w-auto bg-surface/30 p-[3px] rounded-[10px] border border-border/40" role="tablist">
+            {['day', 'month', 'year'].map(v => {
+              const isActive = view === v;
+              return (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setView(v as any)}
+                  className={cn(
+                    "relative px-4 py-1.5 text-xs font-bold uppercase tracking-widest rounded-[7px] transition-colors z-10 min-w-[70px] flex-1 sm:flex-none text-center outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+                    isActive ? "text-textMain" : "text-textMuted hover:text-textMain/80"
+                  )}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="calendarViewIndicator"
+                      className="absolute inset-0 bg-surface/80 border border-border/40 rounded-[7px] shadow-sm"
+                      initial={false}
+                      transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                      style={{ zIndex: -1 }}
+                    />
+                  )}
+                  {v}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* CONTENT */}
+        <div className="flex-1 overflow-hidden relative">
+          <AnimatePresence mode="wait">
+            {view === 'month' && (
+              <motion.div
+                key="month"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } }}
+                exit={{ opacity: 0, y: -8, transition: { duration: 0.15, ease: "easeIn" } }}
+                className="absolute inset-0"
+              >
+                {renderMonthGrid()}
+              </motion.div>
+            )}
+            {view === 'day' && data && (
+              <motion.div
+                key="day"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } }}
+                exit={{ opacity: 0, y: -8, transition: { duration: 0.15, ease: "easeIn" } }}
+                className="absolute inset-0 overflow-y-auto px-4 md:px-8 pt-4"
+              >
+                 <DayPlanner 
+                    date={selectedDate}
+                    data={data}
+                    selectedTaskId={selectedTasks.has('ALL') ? 'ALL' : Array.from(selectedTasks)[0]}
+                    onClose={() => setView('month')}
+                    onChangeDate={d => { setSelectedDate(d); setCurrentDate(d); }}
+                    hook={hook}
+                 />
+              </motion.div>
+            )}
+            {view === 'year' && (
+              <motion.div
+                key="year"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } }}
+                exit={{ opacity: 0, y: -8, transition: { duration: 0.15, ease: "easeIn" } }}
+                className="absolute inset-0"
+              >
+                {renderYearGrid()}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* MAIN CONTENT AREA */}
-      <div className="max-w-[1400px] w-full mx-auto px-4 md:px-8 flex-1 flex">
-        {loading && !data ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-textMuted gap-4 h-64">
-            <Loader2 className="w-8 h-8 animate-spin text-accent" />
-            <p className="text-sm font-medium tracking-wide">Loading history...</p>
+      {(isAddModalOpen || editingTask) && (
+        <AddTaskModal
+          date={format(selectedDate, 'yyyy-MM-dd')}
+          initialTask={editingTask || undefined}
+          onClose={() => { setIsAddModalOpen(false); setEditingTask(null); }}
+          onAdd={async (t) => { await hook.addTask(t); setIsAddModalOpen(false); }}
+          onEdit={async (t, updateType) => {
+             if (updateType === 'single') {
+               await hook.skipTask(t.id, format(selectedDate, 'yyyy-MM-dd'), true);
+               await hook.addTask({ ...t, recurring: 'none', createdAt: format(selectedDate, 'yyyy-MM-dd') });
+             } else {
+               await hook.updateTask(t);
+             }
+             setEditingTask(null);
+          }}
+        />
+      )}
+
+      {/* More Tasks Popover */}
+      {moreTasksDate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setMoreTasksDate(null)}>
+          <div className="bg-surface border border-border/60 rounded-2xl p-4 md:p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-[11px] tracking-widest font-bold text-textMuted uppercase">{format(moreTasksDate, 'EEEE · MMMM d')}</h3>
+              <button onClick={() => setMoreTasksDate(null)} className="text-textMuted hover:text-textMain p-1"><Icons.X size={16} /></button>
+            </div>
+            <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-2">
+              {(() => {
+                const dayTasks = data ? getTasksForDate(data, format(moreTasksDate, 'yyyy-MM-dd')) : [];
+                const filteredByPanel = dayTasks.filter(t => selectedTasks.has('ALL') || selectedTasks.has(t.id));
+                const dayCompletions = data?.days[format(moreTasksDate, 'yyyy-MM-dd')]?.completedTaskIds || [];
+                const completedTasks = filteredByPanel.filter(t => dayCompletions.includes(t.id));
+
+                return completedTasks.map(task => {
+                  const meta = parseTaskMetadata(task);
+
+                  return (
+                    <button
+                      key={task.id}
+                      onClick={() => {
+                        setEditingTask(task);
+                        setMoreTasksDate(null);
+                      }}
+                      className="relative flex flex-col justify-center px-3 py-2 rounded-lg overflow-hidden transition-colors shrink-0 w-full text-left bg-surface/40 text-textMain border border-border/40 hover:bg-surface/80 hover:border-border/60"
+                    >
+                      {/* Left accent stripe */}
+                      <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-accent/70" />
+
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="truncate text-sm font-medium leading-tight">
+                          {task.name}
+                        </span>
+                      </div>
+                      {meta.startTime && (
+                        <span className="truncate text-xs text-textMuted leading-tight mt-1">
+                          {meta.startTime}{meta.endTime ? `–${meta.endTime}` : ''}
+                        </span>
+                      )}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+            <button
+              onClick={() => {
+                setSelectedDate(moreTasksDate);
+                setView('day');
+                setMoreTasksDate(null);
+              }}
+              className="mt-2 w-full py-2.5 rounded-xl border border-border/60 text-sm font-bold text-textMain hover:bg-surface transition-colors"
+            >
+              Open Day Planner
+            </button>
           </div>
-        ) : (
-          <div className="w-full flex justify-center">
-            {view === 'day' && data ? (
-              <div className="w-full max-w-[800px] animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <DayPlanner
-                  date={selectedDate}
-                  data={data}
-                  selectedTaskId={selectedTaskId}
-                  onClose={() => setView('month')}
-                  onChangeDate={setSelectedDate}
-                  hook={hook}
-                />
-              </div>
-            ) : (
-              <div className="w-full max-w-[980px]">
-                <div className="mb-6 md:mb-8 text-center md:text-left">
-                  <h2 className="text-xl md:text-2xl font-black text-textMain tracking-tight uppercase">
-                    {selectedTaskId !== 'ALL' && <span className="text-textMuted font-bold mr-3">{selectedTaskName}</span>}
-                    {view === 'month' ? format(currentDate, 'MMMM yyyy') : format(currentDate, 'yyyy')}
-                  </h2>
-                </div>
-                {view === 'month' ? renderMonthGrid() : renderYearGrid()}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

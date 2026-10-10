@@ -133,7 +133,7 @@ export function ProfilePage() {
         <div className="flex items-center gap-12 md:gap-24 py-8 border-t border-border/20 mb-8 overflow-x-auto no-scrollbar">
           <div className="flex flex-col gap-2 shrink-0">
             <span className="text-3xl md:text-4xl font-black text-textMain tracking-tighter flex items-center h-10">
-              {stats ? stats.currentStreak : <Loader2 size={20} className="animate-spin text-textMuted/50" />}
+              {stats ? (profile?.current_streak ?? stats.currentStreak) : <Loader2 size={20} className="animate-spin text-textMuted/50" />}
             </span>
             <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-textMuted">Current Streak</span>
           </div>
@@ -256,3 +256,4 @@ export function ProfilePage() {
     </div>
   );
 }
+

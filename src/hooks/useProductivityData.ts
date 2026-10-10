@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { AppData, Task, DailyData, TaskMetadata } from '../lib/dataManager';
-import { calculateStats, parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
+import { parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
 import { addDays, parseISO, format } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export function useProductivityData(year: number) {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user } = useAuth();
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -99,16 +99,7 @@ export function useProductivityData(year: number) {
     fetchData();
   }, [fetchData]);
 
-  useEffect(() => {
-    if (data && user) {
-      const stats = calculateStats(data, year);
-      if (stats.currentStreak !== profile?.current_streak) {
-        supabase.from('user_stats').upsert({ user_id: user.id, current_streak: stats.currentStreak }).then(() => {
-          refreshProfile();
-        });
-      }
-    }
-  }, [data, user, profile?.current_streak, year, refreshProfile]);
+  
 
   const addTask = async (taskData: Omit<Task, 'id'>) => {
     if (!user || !data) return false;
@@ -190,6 +181,11 @@ export function useProductivityData(year: number) {
   };
 
   const toggleTaskCompletion = async (taskId: string, dateStr: string) => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (dateStr !== todayStr) {
+      toast.error('Tasks can only be completed on their scheduled date.');
+      return;
+    }
     if (!user || !data) return;
 
     const dayData = data.days[dateStr] || { tasks: [], completedTaskIds: [] };
@@ -280,6 +276,11 @@ export function useProductivityData(year: number) {
   };
 
   const toggleManualCompletion = async (dateStr: string) => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    if (dateStr !== todayStr) {
+      toast.error('Manual completion can only be toggled for today.');
+      return;
+    }
     if (!user || !data) return;
 
     const isManuallyCompleted = !!data.days[dateStr]?.manualCompletion;
@@ -337,3 +338,7 @@ export function useProductivityData(year: number) {
     refresh: fetchData
   };
 }
+
+
+
+

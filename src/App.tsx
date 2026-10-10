@@ -39,6 +39,7 @@ const AnalyticsPage = safeLazy(() => import('./pages/AnalyticsPage').then(m => (
 const NotesPage = safeLazy(() => import('./pages/NotesPage').then(m => ({ default: m.NotesPage })));
 const NoteEditorPage = safeLazy(() => import('./pages/NoteEditorPage').then(m => ({ default: m.NoteEditorPage })));
 const FriendsPage = safeLazy(() => import('./pages/FriendsPage').then(m => ({ default: m.FriendsPage })));
+const TranscendPage = safeLazy(() => import('./pages/TranscendPage').then(m => ({ default: m.TranscendPage })))
 const ProfilePage = safeLazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 const PublicProfilePage = safeLazy(() => import('./pages/PublicProfilePage').then(m => ({ default: m.PublicProfilePage })));
 const SettingsPage = safeLazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
@@ -84,6 +85,7 @@ function App() {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/friends" element={<FriendsPage />} />
+            <Route path="/transcend" element={<TranscendPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
