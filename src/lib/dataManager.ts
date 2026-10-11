@@ -1,5 +1,6 @@
 import { differenceInDays, format, parseISO, subDays, getDay, isBefore, startOfDay } from 'date-fns';
 import { RRule } from 'rrule';
+import { parseTimeString } from './timeUtils';
 
 export type TaskMetadata = {
   notes?: string;
@@ -145,6 +146,64 @@ export const getParsedRRule = (rruleStr: string): RRule | null => {
   }
 };
 
+/**
+ * Extracts the scheduled time of a task as total minutes from midnight (0 to 1439).
+ * Returns null if the task is untimed / anytime.
+ */
+export function getTaskScheduledMinutes(task: Task): number | null {
+  const meta = parseTaskMetadata(task);
+
+  // 1. Authoritative scheduled time field from task metadata
+  const timeCandidate = meta.startTime || (meta as any).time;
+  if (timeCandidate) {
+    const parsed = parseTimeString(timeCandidate);
+    if (parsed) return parsed.h * 60 + parsed.m;
+  }
+
+  // 2. Fallback to task.duration if formatted as a time string
+  if (task.duration) {
+    const parsed = parseTimeString(task.duration);
+    if (parsed) return parsed.h * 60 + parsed.m;
+  }
+
+  // 3. Fallback: extract time pattern from task title (e.g. "Sleep — 10:00 PM")
+  if (task.name) {
+    const nameMatch = task.name.match(/(?:^|\s|[—\-–@]|at\s+)(\d{1,2}:\d{2}(?:\s?[ap]m)?|\d{1,2}\s?[ap]m)(?:\s|$)/i);
+    if (nameMatch) {
+      const parsed = parseTimeString(nameMatch[1]);
+      if (parsed) return parsed.h * 60 + parsed.m;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Stably sorts tasks in ascending chronological order:
+ * - Timed tasks appear first, ordered from earliest to latest (0:00 to 23:59).
+ * - Untimed / anytime tasks appear at the bottom.
+ * - Tasks with identical scheduled times preserve their original relative order.
+ * - Untimed tasks preserve their original relative order.
+ * - Does not mutate the original array.
+ */
+export function sortTasksChronologically(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const timeA = getTaskScheduledMinutes(a);
+    const timeB = getTaskScheduledMinutes(b);
+
+    if (timeA !== null && timeB !== null) {
+      return timeA - timeB;
+    }
+    if (timeA !== null && timeB === null) {
+      return -1; // timed before untimed
+    }
+    if (timeA === null && timeB !== null) {
+      return 1; // untimed after timed
+    }
+    return 0; // both untimed, preserve relative order
+  });
+}
+
 export const getTasksForDate = (data: AppData, dateStr: string): Task[] => {
   const dayData = data.days[dateStr];
   const specificTasks = dayData?.tasks || [];
@@ -199,7 +258,7 @@ export const getTasksForDate = (data: AppData, dateStr: string): Task[] => {
     return false;
   });
 
-  return [...specificTasks, ...applicableRecurring];
+  return sortTasksChronologically([...specificTasks, ...applicableRecurring]);
 };
 
 export const getDayCompletionInfo = (data: AppData, dateStr: string) => {

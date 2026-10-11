@@ -302,18 +302,17 @@ export function useProductivityData(year: number) {
     }
   };
 
-  const deleteTask = async (taskId: string, dateStr: string, isRecurring: boolean) => {
+  const deleteTask = async (taskId: string, _dateStr?: string, _isRecurring?: boolean) => {
     if (!user || !data) return;
 
     const previousData = structuredClone(data);
     const newData = structuredClone(data);
 
-    if (isRecurring) {
-      newData.recurringTasks = newData.recurringTasks.filter(t => t.id !== taskId);
-    } else if (newData.days[dateStr]) {
-      newData.days[dateStr].tasks = newData.days[dateStr].tasks.filter(t => t.id !== taskId);
-      newData.days[dateStr].completedTaskIds = newData.days[dateStr].completedTaskIds.filter(id => id !== taskId);
-    }
+    newData.recurringTasks = newData.recurringTasks.filter(t => t.id !== taskId);
+    Object.keys(newData.days).forEach(d => {
+      newData.days[d].tasks = newData.days[d].tasks.filter(t => t.id !== taskId);
+      newData.days[d].completedTaskIds = newData.days[d].completedTaskIds.filter(id => id !== taskId);
+    });
     setData(newData);
 
     const { error } = await supabase.from('tasks').delete().match({ id: taskId, user_id: user.id });

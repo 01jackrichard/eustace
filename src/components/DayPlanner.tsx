@@ -218,7 +218,7 @@ export function DayPlanner({ date, data, selectedTaskId, onClose, onChangeDate, 
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditingTask(task); setActiveMenuId(null); }}
-                            className={cn("w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2", !isCurrentDay && "opacity-50 cursor-not-allowed")}
+                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2"
                           >
                             <Edit2 size={14} className="text-textMuted" /> Edit Task
                           </button>
@@ -303,11 +303,15 @@ export function DayPlanner({ date, data, selectedTaskId, onClose, onChangeDate, 
                           "mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 border transition-all",
                           isCompleted
                             ? "bg-accent border-accent text-background"
+                            : !isCurrentDay
+                            ? "border-textMuted/20 cursor-not-allowed"
                             : "border-textMuted/50 hover:border-textMain"
                         )}
+                        disabled={!isCurrentDay}
+                        title={!isCurrentDay ? 'Tasks can only be completed on their scheduled date.' : ''}
                         onClick={(e) => {
                           e.stopPropagation();
-                          hook.toggleTaskCompletion(task.id, dateStr);
+                          if (isCurrentDay) hook.toggleTaskCompletion(task.id, dateStr);
                         }}
                       >
                         {isCompleted && <Check size={12} strokeWidth={4} />}
@@ -345,7 +349,7 @@ export function DayPlanner({ date, data, selectedTaskId, onClose, onChangeDate, 
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditingTask(task); setActiveMenuId(null); }}
-                            className={cn("w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2", !isCurrentDay && "opacity-50 cursor-not-allowed")}
+                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-textMain hover:bg-white/5 flex items-center gap-2"
                           >
                             <Edit2 size={14} className="text-textMuted" /> Edit Task
                           </button>
@@ -386,7 +390,8 @@ export function DayPlanner({ date, data, selectedTaskId, onClose, onChangeDate, 
           onClose={() => { setIsAddModalOpen(false); setEditingTask(null); }}
           onAdd={async (t) => { await hook.addTask(t); setIsAddModalOpen(false); }}
           onEdit={async (t, updateType) => {
-             if (updateType === 'single') {
+             const isOriginallyRecurring = editingTask ? editingTask.recurring !== 'none' : t.recurring !== 'none';
+             if (isOriginallyRecurring && updateType === 'single') {
                await hook.skipTask(t.id, dateStr, true);
                await hook.addTask({ ...t, recurring: 'none', createdAt: dateStr });
              } else {

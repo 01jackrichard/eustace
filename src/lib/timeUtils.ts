@@ -1,14 +1,16 @@
 export function parseTimeString(timeStr: string | undefined): { h: number; m: number } | null {
   if (!timeStr || typeof timeStr !== 'string') return null;
-  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?:\s?(AM|PM|am|pm))?$/);
+  const trimmed = timeStr.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?(?:\s?(AM|PM|am|pm))?$/i);
   if (!match) {
-    // try fallback for just hour
-    const matchHour = timeStr.trim().match(/^(\d{1,2})(?:\s?(AM|PM|am|pm))?$/);
+    // try fallback for just hour (e.g. "5 AM" or "22")
+    const matchHour = trimmed.match(/^(\d{1,2})(?:\s?(AM|PM|am|pm))?$/i);
     if (!matchHour) return null;
     let h = parseInt(matchHour[1], 10);
     const ampm = matchHour[2]?.toUpperCase();
     if (ampm === 'PM' && h < 12) h += 12;
     if (ampm === 'AM' && h === 12) h = 0;
+    if (isNaN(h) || h < 0 || h > 23) return null;
     return { h, m: 0 };
   }
   let h = parseInt(match[1], 10);
@@ -17,7 +19,7 @@ export function parseTimeString(timeStr: string | undefined): { h: number; m: nu
   if (ampm === 'PM' && h < 12) h += 12;
   if (ampm === 'AM' && h === 12) h = 0;
   
-  if (isNaN(h) || isNaN(m)) return null;
+  if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return null;
   return { h, m };
 }
 

@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { format, addDays, subDays, isToday } from 'date-fns';
+import { useState, useMemo } from 'react';
+import { format, addDays, subDays, isToday, isBefore, startOfDay } from 'date-fns';
 import { Check, ChevronLeft, ChevronRight, Plus, MoreVertical, Trash2, Edit2, Repeat, CheckCircle2, Circle } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getTasksForDate, getDayCompletionInfo, parseTaskMetadata, serializeTaskMetadata, type AppData, type Task } from '../lib/dataManager';
+import { getTasksForDate, getDayCompletionInfo, parseTaskMetadata, serializeTaskMetadata, sortTasksChronologically, type AppData, type Task } from '../lib/dataManager';
 import { AddTaskModal } from './AddTaskModal';
 
 interface DailyViewProps {
@@ -20,7 +20,7 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   const dateStr = format(date, 'yyyy-MM-dd');
-  const tasks = getTasksForDate(data, dateStr);
+  const tasks = useMemo(() => sortTasksChronologically(getTasksForDate(data, dateStr)), [data, dateStr]);
   const info = getDayCompletionInfo(data, dateStr);
   const dayData = data.days[dateStr] || { tasks: [], completedTaskIds: [] };
 
@@ -34,12 +34,14 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
   const handleEditTask = async (updatedTask: Task, updateType?: 'single' | 'future' | 'all') => {
     if (!hook?.updateTask) return;
 
-    if (updateType === 'single') {
-      // Create exception for today
+    const isOriginallyRecurring = editingTask ? editingTask.recurring !== 'none' : updatedTask.recurring !== 'none';
+
+    if (isOriginallyRecurring && updateType === 'single') {
+      // Create exception for selected date
       await hook.skipTask(updatedTask.id, dateStr, true);
       const singleTask = { ...updatedTask, recurring: 'none' as const, createdAt: dateStr };
       await hook.addTask(singleTask);
-    } else if (updateType === 'future') {
+    } else if (isOriginallyRecurring && updateType === 'future') {
       // End old series yesterday
       const oldTask = data.recurringTasks.find(t => t.id === updatedTask.id);
       if (oldTask) {
@@ -49,7 +51,7 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
         await hook.updateTask({ ...oldTask, description: serializeTaskMetadata(oldMeta), metadata: oldMeta });
       }
 
-      // Start new series today
+      // Start new series from selected date
       const newMeta = parseTaskMetadata(updatedTask);
       newMeta.startDate = dateStr;
       const newTask = {
@@ -65,6 +67,7 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
   };
 
   const toggleTask = (taskId: string) => {
+    if (!isCurrentDay) return;
     if (hook?.toggleTaskCompletion) {
       hook.toggleTaskCompletion(taskId, dateStr);
     }
@@ -84,6 +87,7 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
   const closeMenu = () => setActiveMenuId(null);
 
   const isCurrentDay = isToday(date);
+  const isPastDay = isBefore(date, startOfDay(new Date()));
 
   return (
     <div className="flex flex-col w-full animate-fade-in" onClick={closeMenu}>
@@ -98,7 +102,7 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
         </button>
 
         <div className="flex flex-col items-center cursor-pointer group" onClick={() => setDate(new Date())}>
-          <span className={cn(!isCurrentDay && "opacity-50 cursor-not-allowed",
+          <span className={cn(
             "text-xs font-bold tracking-[0.25em] transition-colors uppercase",
             isCurrentDay ? "text-textMain" : "text-textMuted group-hover:text-textMain"
           )}>
@@ -220,7 +224,7 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
                 return (
                   <div
                     key={task.id}
-                    className={cn(!isCurrentDay && "opacity-50 cursor-not-allowed",
+                    className={cn(
                       "group relative flex items-start gap-4 p-4 rounded-xl transition-all duration-300",
                       isCompleted ? "bg-transparent opacity-50" : "bg-surface/30 hover:bg-surface/80 border border-transparent hover:border-border/30"
                     )}
@@ -228,15 +232,18 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
                     {/* Custom Checkbox */}
                     <button
                       onClick={() => !isSkipped && isCurrentDay && toggleTask(task.id)}
-                      disabled={isSkipped || !isCurrentDay} title={!isCurrentDay ? 'Tasks can only be completed on their scheduled date.' : ''}
-                      className={cn(!isCurrentDay && "opacity-50 cursor-not-allowed","mt-0.5 flex-shrink-0 outline-none", !isCurrentDay && "cursor-not-allowed")}
+                      disabled={isSkipped || !isCurrentDay}
+                      title={!isCurrentDay ? (isPastDay ? 'Historical task completions cannot be modified.' : 'Future tasks cannot be completed in advance.') : (isSkipped ? 'Task was skipped.' : '')}
+                      className={cn("mt-0.5 flex-shrink-0 outline-none", !isCurrentDay && "cursor-not-allowed")}
                     >
-                      <div className={cn(!isCurrentDay && "opacity-50 cursor-not-allowed",
+                      <div className={cn(
                         "w-5 h-5 rounded-full flex items-center justify-center transition-all duration-300 border-2",
                         isSkipped ? "border-transparent bg-transparent" :
-                        isCompleted ? "bg-accent border-accent text-background" : "bg-transparent border-textMuted/40 group-hover:border-accent/50"
+                        isCompleted ? "bg-accent border-accent text-background" : 
+                        !isCurrentDay ? "bg-transparent border-textMuted/20" :
+                        "bg-transparent border-textMuted/40 group-hover:border-accent/50"
                       )}>
-                        <Check size={12} strokeWidth={isCompleted ? 4 : 3} className={cn(!isCurrentDay && "opacity-50 cursor-not-allowed",
+                        <Check size={12} strokeWidth={isCompleted ? 4 : 3} className={cn(
                           "transition-all duration-300",
                           isCompleted ? "opacity-100 scale-100" : "opacity-0 scale-50"
                         )} />
@@ -245,11 +252,11 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center pt-0.5">
                       <div className="flex items-center gap-2.5">
-                        <SelectedIcon size={16} className={cn(!isCurrentDay && "opacity-50 cursor-not-allowed",
+                        <SelectedIcon size={16} className={cn(
                           "flex-shrink-0 transition-colors", 
                           isCompleted ? "text-textMuted" : meta.icon ? "text-accent" : "text-textMuted/70"
                         )} />
-                        <span className={cn(!isCurrentDay && "opacity-50 cursor-not-allowed",
+                        <span className={cn(
                           "text-base font-medium transition-all duration-300 truncate",
                           isCompleted ? "text-textMuted line-through" : "text-textMain",
                           isSkipped ? "text-textMuted/50" : ""
@@ -257,7 +264,7 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
                           {task.name}
                         </span>
                         {isRecurring && (
-                          <Repeat size={12} className={cn(!isCurrentDay && "opacity-50 cursor-not-allowed","flex-shrink-0", isCompleted ? "text-textMuted/40" : "text-accent/60")} />
+                          <Repeat size={12} className={cn("flex-shrink-0", isCompleted ? "text-textMuted/40" : "text-accent/60")} />
                         )}
                       </div>
 

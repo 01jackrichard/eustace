@@ -1,6 +1,6 @@
 import { SmoothInput } from '../components/ui/SmoothInput';
 /* eslint-disable react-compiler/react-compiler, react/purity, react-hooks/exhaustive-deps, react/set-state-in-effect */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Loader2, ChevronLeft, ChevronRight, Search, Plus, Check, Filter, X } from 'lucide-react';
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval,
@@ -57,16 +57,51 @@ export function CalendarPage() {
     setSelectedDate(today);
   };
 
-  // Build task list
+  // Build task list: strictly represent genuine task completion history
   const allTasks = useMemo(() => {
     if (!data) return [];
-    const tasksMap = new Map();
+    
+    // 1. Map all known tasks by authoritative ID
+    const tasksMap = new Map<string, Task>();
     data.recurringTasks.forEach(t => tasksMap.set(t.id, t));
     Object.values(data.days).forEach(day => {
       day.tasks.forEach(t => tasksMap.set(t.id, t));
     });
-    return Array.from(tasksMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+    // 2. Gather all completed task IDs across all loaded days
+    const completedTaskIds = new Set<string>();
+    Object.values(data.days).forEach(day => {
+      day.completedTaskIds?.forEach(id => completedTaskIds.add(id));
+    });
+
+    // 3. Only tasks with at least one completed occurrence qualify for MY TASKS
+    const qualifyingTasks: Task[] = [];
+    completedTaskIds.forEach(id => {
+      const task = tasksMap.get(id);
+      if (task) {
+        qualifyingTasks.push(task);
+      }
+    });
+
+    return qualifyingTasks.sort((a, b) => a.name.localeCompare(b.name));
   }, [data]);
+
+  // Clean up selectedTasks if a selected task is deleted or no longer has completion history
+  useEffect(() => {
+    setSelectedTasks(prev => {
+      if (prev.has('ALL')) return prev;
+      const validIds = new Set(allTasks.map(t => t.id));
+      const next = new Set(Array.from(prev).filter(id => validIds.has(id)));
+      if (next.size === 0) next.add('ALL');
+      return next;
+    });
+  }, [allTasks]);
+
+  const displayedTasks = useMemo(() => {
+    if (!searchQuery.trim()) return allTasks;
+    const q = searchQuery.toLowerCase();
+    return allTasks.filter(t => t.name.toLowerCase().includes(q));
+  }, [allTasks, searchQuery]);
 
   const toggleTaskSelection = (taskId: string) => {
     setSelectedTasks(prev => {
@@ -341,7 +376,7 @@ export function CalendarPage() {
                     </div>
                     <span className="text-sm font-medium text-textMain truncate">All Tasks</span>
                   </button>
-                  {allTasks.map(task => (
+                  {displayedTasks.map(task => (
                     <button
                       key={task.id}
                       onClick={() => toggleTaskSelection(task.id)}
@@ -393,7 +428,7 @@ export function CalendarPage() {
                 </div>
                 <span className="text-sm font-medium text-textMain truncate">All Tasks</span>
               </button>
-              {allTasks.map(task => (
+              {displayedTasks.map(task => (
                 <button
                   key={task.id}
                   onClick={() => toggleTaskSelection(task.id)}
@@ -527,7 +562,8 @@ export function CalendarPage() {
           onClose={() => { setIsAddModalOpen(false); setEditingTask(null); }}
           onAdd={async (t) => { await hook.addTask(t); setIsAddModalOpen(false); }}
           onEdit={async (t, updateType) => {
-             if (updateType === 'single') {
+             const isOriginallyRecurring = editingTask ? editingTask.recurring !== 'none' : t.recurring !== 'none';
+             if (isOriginallyRecurring && updateType === 'single') {
                await hook.skipTask(t.id, format(selectedDate, 'yyyy-MM-dd'), true);
                await hook.addTask({ ...t, recurring: 'none', createdAt: format(selectedDate, 'yyyy-MM-dd') });
              } else {
