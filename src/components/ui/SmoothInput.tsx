@@ -58,7 +58,7 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
 
   const inputValue = isControlled ? String(value) : internalValue;
   const activeType = type as SmoothInputType;
-  const displayPlaceholder = placeholder || "smooth input";
+  const displayPlaceholder = placeholder ?? "";
 
   const syncMeasureSpan = () => {
     const input = inputRef.current;

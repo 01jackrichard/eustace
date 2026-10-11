@@ -89,10 +89,22 @@ export async function compressImageToLimit(
   onProgress?.('Verifying image format...');
   const img = await validateAndLoadImage(file);
 
-  onProgress?.('Analyzing dimensions...');
+  // If original file is already <= 500,000 bytes and decodable with reasonable dimensions
+  if (file.size <= MAX_IMAGE_BYTES && img.naturalWidth <= 2048 && img.naturalHeight <= 2048) {
+    const previewUrl = URL.createObjectURL(file);
+    return {
+      file,
+      blob: file,
+      previewUrl,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      sizeBytes: file.size
+    };
+  }
+
+  onProgress?.('Optimizing image size...');
   let maxDimension = 1600;
   let quality = 0.85;
-  // Use WebP if supported, otherwise JPEG.
   const outputMime = 'image/webp';
 
   const canvas = document.createElement('canvas');
@@ -159,9 +171,7 @@ export async function compressImageToLimit(
   }
 
   if (!finalBlob || finalBlob.size > MAX_IMAGE_BYTES) {
-    throw new Error(
-      `Image exceeds the maximum allowed size of 500 KB (${MAX_IMAGE_BYTES.toLocaleString()} bytes) after compression. Please select a smaller image.`
-    );
+    throw new Error('Image must be 500 KB or less. Please choose a smaller image.');
   }
 
   // Create clean filename with appropriate extension

@@ -8,6 +8,7 @@ interface MessageItemProps {
   message: ChatMessage;
   isOutgoing: boolean;
   otherUserLastReadAt: string | null;
+  otherUserLastDeliveredAt?: string | null;
   onRetry?: (message: ChatMessage) => void;
   onOpenImage?: (url: string) => void;
 }
@@ -16,6 +17,7 @@ export function MessageItem({
   message,
   isOutgoing,
   otherUserLastReadAt,
+  otherUserLastDeliveredAt,
   onRetry,
   onOpenImage
 }: MessageItemProps) {
@@ -28,6 +30,12 @@ export function MessageItem({
     message.status === 'sent' &&
     !!otherUserLastReadAt &&
     new Date(otherUserLastReadAt) >= new Date(message.created_at);
+
+  const isDelivered =
+    isOutgoing &&
+    message.status === 'sent' &&
+    !!otherUserLastDeliveredAt &&
+    new Date(otherUserLastDeliveredAt) >= new Date(message.created_at);
 
   const imageUrl = message.localPreviewUrl || message.signedImageUrl;
 
@@ -124,8 +132,12 @@ export function MessageItem({
                   <span title="Read" className="text-accent flex items-center">
                     <CheckCheck size={13} />
                   </span>
+                ) : isDelivered ? (
+                  <span title="Delivered" className="text-textMuted/70 flex items-center">
+                    <CheckCheck size={13} />
+                  </span>
                 ) : (
-                  <span title="Delivered" className="text-textMuted/60 flex items-center">
+                  <span title="Sent to server" className="text-textMuted/60 flex items-center">
                     <Check size={13} />
                   </span>
                 )

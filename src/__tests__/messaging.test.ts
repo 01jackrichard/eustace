@@ -172,4 +172,83 @@ describe('Eustace Direct Messaging System - Core Logic & Security Tests', () => 
       expect(state.length).toBe(2);
     });
   });
+
+  describe('5. Delivery Receipt Ticks & State Calculation', () => {
+    type TickState = 'sending' | 'sent' | 'delivered' | 'read' | 'error';
+
+    const resolveTickState = (
+      status: 'sending' | 'sent' | 'error',
+      createdAt: string,
+      otherLastDeliveredAt: string | null,
+      otherLastReadAt: string | null
+    ): TickState => {
+      if (status === 'error') return 'error';
+      if (status === 'sending') return 'sending';
+      const createdTime = new Date(createdAt).getTime();
+      if (otherLastReadAt && new Date(otherLastReadAt).getTime() >= createdTime) {
+        return 'read';
+      }
+      if (otherLastDeliveredAt && new Date(otherLastDeliveredAt).getTime() >= createdTime) {
+        return 'delivered';
+      }
+      return 'sent';
+    };
+
+    const msgTime = '2026-10-11T12:00:00.000Z';
+
+    it('returns sending (spinner) while in-flight', () => {
+      expect(resolveTickState('sending', msgTime, null, null)).toBe('sending');
+    });
+
+    it('returns sent (1 gray tick) when recorded on server but recipient offline', () => {
+      expect(resolveTickState('sent', msgTime, null, null)).toBe('sent');
+      expect(resolveTickState('sent', msgTime, '2026-10-11T11:59:59.000Z', null)).toBe('sent');
+    });
+
+    it('returns delivered (2 gray ticks) when recipient client has acknowledged receipt', () => {
+      expect(resolveTickState('sent', msgTime, '2026-10-11T12:00:00.000Z', null)).toBe('delivered');
+      expect(resolveTickState('sent', msgTime, '2026-10-11T12:05:00.000Z', null)).toBe('delivered');
+    });
+
+    it('returns read (2 accent ticks) when recipient has viewed the conversation', () => {
+      expect(
+        resolveTickState('sent', msgTime, '2026-10-11T12:00:05.000Z', '2026-10-11T12:01:00.000Z')
+      ).toBe('read');
+    });
+  });
+
+  describe('6. Chat Storage Path Normalization & Sanitization', () => {
+    const sanitizeStoragePath = (imagePath: string, bucket = 'message-images'): string => {
+      let clean = imagePath.trim();
+      const prefix = new RegExp(`^${bucket}/`);
+      return clean.replace(/^\/+/, '').replace(prefix, '').replace(/^\/+/, '');
+    };
+
+    it('strips redundant bucket prefixes and leading slashes', () => {
+      expect(sanitizeStoragePath('message-images/conv-1/image.webp')).toBe('conv-1/image.webp');
+      expect(sanitizeStoragePath('/message-images/conv-1/image.webp')).toBe('conv-1/image.webp');
+      expect(sanitizeStoragePath('conv-1/image.webp')).toBe('conv-1/image.webp');
+      expect(sanitizeStoragePath('///conv-1/image.webp')).toBe('conv-1/image.webp');
+    });
+  });
+
+  describe('7. Deterministic Conversation Pair Sorting', () => {
+    const sortUserPair = (uA: string, uB: string): [string, string] => {
+      return uA < uB ? [uA, uB] : [uB, uA];
+    };
+
+    it('normalizes conversation user pairs deterministically regardless of who initiates', () => {
+      const userAlpha = '00000000-0000-0000-0000-000000000001';
+      const userBeta = '00000000-0000-0000-0000-000000000002';
+
+      const pair1 = sortUserPair(userAlpha, userBeta);
+      const pair2 = sortUserPair(userBeta, userAlpha);
+
+      expect(pair1).toEqual([userAlpha, userBeta]);
+      expect(pair2).toEqual([userAlpha, userBeta]);
+      expect(pair1[0]).toBe(pair2[0]);
+      expect(pair1[1]).toBe(pair2[1]);
+    });
+  });
 });
+

@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Paperclip, Send, X, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { cn } from '../../lib/utils';
 import { compressImageToLimit, type CompressedImageResult } from '../../lib/imageCompression';
+import { showErrorToast } from '../../lib/toast';
 
 interface MessageComposerProps {
   onSendMessage: (text: string) => Promise<void>;
@@ -30,15 +30,21 @@ export function MessageComposer({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const stagedUrlRef = useRef<string | null>(null);
 
-  // Clean up object URL when stagedImage is removed or unmounted
+  // Keep stagedUrlRef in sync
+  useEffect(() => {
+    stagedUrlRef.current = stagedImage?.previewUrl || null;
+  }, [stagedImage]);
+
+  // Clean up object URL on unmount only
   useEffect(() => {
     return () => {
-      if (stagedImage) {
-        URL.revokeObjectURL(stagedImage.previewUrl);
+      if (stagedUrlRef.current) {
+        URL.revokeObjectURL(stagedUrlRef.current);
       }
     };
-  }, [stagedImage]);
+  }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -52,10 +58,18 @@ export function MessageComposer({
 
     try {
       const result = await compressImageToLimit(file, (stage) => setCompressionStage(stage));
+      // Revoke previous URL if any
+      if (stagedImage?.previewUrl) {
+        URL.revokeObjectURL(stagedImage.previewUrl);
+      }
       setStagedImage(result);
     } catch (err: any) {
-      console.error('Image compression error:', err);
-      toast.error(err.message || 'Failed to process image. Maximum allowed size is 500 KB.');
+      console.error('Image validation/compression error:', err);
+      showErrorToast(
+        err,
+        'Image must be 500 KB or less. Please choose a smaller image.',
+        'composer_image_error'
+      );
     } finally {
       setCompressing(false);
       setCompressionStage('');
@@ -78,16 +92,17 @@ export function MessageComposer({
     if (stagedImage) {
       setIsSubmitting(true);
       const img = stagedImage;
-      setStagedImage(null); // clear staging immediately
       try {
         await onSendImage(img.file, img.previewUrl, {
           width: img.width,
           height: img.height,
           sizeBytes: img.sizeBytes
         });
+        // Success: now revoke URL and clear staged image
+        URL.revokeObjectURL(img.previewUrl);
+        setStagedImage(null);
       } catch (err: any) {
-        toast.error(err.message || 'Failed to upload image.');
-        setStagedImage(img); // restore on error so user can retry
+        showErrorToast(err, 'Failed to upload image.', 'composer_upload_error');
       } finally {
         setIsSubmitting(false);
       }
@@ -98,7 +113,7 @@ export function MessageComposer({
     if (!trimmedText) return;
 
     if (trimmedText.length > 4000) {
-      toast.error('Message exceeds maximum limit of 4,000 characters.');
+      showErrorToast('Message exceeds maximum limit of 4,000 characters.', undefined, 'composer_char_limit');
       return;
     }
 
@@ -109,7 +124,7 @@ export function MessageComposer({
       await onSendMessage(textToSend);
     } catch (err: any) {
       setText(textToSend); // restore on error
-      toast.error(err.message || 'Failed to send message.');
+      showErrorToast(err, 'Failed to send message.', 'composer_send_error');
     } finally {
       setIsSubmitting(false);
       textareaRef.current?.focus();
