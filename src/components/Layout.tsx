@@ -20,6 +20,8 @@ export function ProtectedLayout() {
     return saved !== 'closed';
   });
 
+  const isFullBleed = location.pathname.startsWith('/friends') || location.pathname.startsWith('/notes');
+
   useEffect(() => {
     localStorage.setItem('eustace_sidebar_state', isSidebarOpen ? 'open' : 'closed');
   }, [isSidebarOpen]);
@@ -41,7 +43,10 @@ export function ProtectedLayout() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col relative">
+    <div className={cn(
+      "min-h-[100dvh] bg-background flex flex-col relative",
+      isFullBleed && "h-[100dvh] overflow-hidden"
+    )}>
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
       <MobileHeader />
       
@@ -60,7 +65,8 @@ export function ProtectedLayout() {
 
       <main 
         className={cn(
-          "flex-1 flex flex-col pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(60px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 min-h-[100dvh] transition-[padding] duration-300 ease-in-out",
+          "flex-1 flex flex-col pt-[calc(56px+env(safe-area-inset-top))] pb-[calc(60px+env(safe-area-inset-bottom))] md:pt-0 md:pb-0 transition-[padding] duration-300 ease-in-out min-h-0",
+          isFullBleed ? "h-[100dvh] overflow-hidden" : "min-h-[100dvh]",
           isSidebarOpen ? "md:pl-64" : "md:pl-0"
         )}
       >
@@ -71,7 +77,12 @@ export function ProtectedLayout() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full flex flex-col min-h-full"
+            className={cn(
+              "flex-1 w-full flex flex-col min-h-0",
+              isFullBleed
+                ? "p-0 max-w-none h-full overflow-hidden"
+                : "p-4 md:p-8 max-w-7xl mx-auto min-h-full"
+            )}
           >
             <Outlet />
           </motion.div>
