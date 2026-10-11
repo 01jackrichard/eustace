@@ -1,5 +1,5 @@
 /* eslint-disable react-compiler/react-compiler, react/purity, react-hooks/exhaustive-deps, react/set-state-in-effect */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   Loader2,
@@ -13,7 +13,6 @@ import {
   Users
 } from 'lucide-react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import toast from 'react-hot-toast';
 import { useDebounce } from '../hooks/useDebounce';
 import { supabase } from '../lib/supabase';
 import { cn } from '../lib/utils';
@@ -22,6 +21,7 @@ import { useConversations } from '../hooks/useConversations';
 import { ConversationList } from '../components/chat/ConversationList';
 import { ChatPane } from '../components/chat/ChatPane';
 import { SmoothInput } from '../components/ui/SmoothInput';
+import { showErrorToast } from '../lib/toast';
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -79,6 +79,8 @@ export function FriendsPage() {
   const [isSearching, setIsSearching] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 400);
 
+  const handledChatParamRef = useRef<string | null>(null);
+
   // Handle URL deep-linking: ?chat=<friendId> or ?conversationId=<id>
   useEffect(() => {
     const chatFriendId = searchParams.get('chat') || searchParams.get('friendId');
@@ -91,6 +93,11 @@ export function FriendsPage() {
         setSelectedFriend(foundConv.friend);
       }
     } else if (chatFriendId && user) {
+      if (handledChatParamRef.current === chatFriendId) {
+        return;
+      }
+      handledChatParamRef.current = chatFriendId;
+
       setActiveTab('messages');
       const friendProfile = acceptedFriends.find((f) => f.profiles.id === chatFriendId)?.profiles;
       if (friendProfile) {
@@ -100,16 +107,18 @@ export function FriendsPage() {
       openConversationWithFriend(chatFriendId)
         .then((convId) => {
           setSelectedConversationId(convId);
+          // Transition URL from ?chat= to ?conversationId= to permanently prevent re-trigger loop
+          setSearchParams({ tab: 'messages', conversationId: convId }, { replace: true });
         })
         .catch((err) => {
           console.error('Could not open conversation from URL param:', err);
-          toast.error(err?.message || 'Failed to open conversation');
+          showErrorToast(err, 'Failed to open conversation.', 'open_chat_error');
         })
         .finally(() => {
           setIsOpeningChat(false);
         });
     }
-  }, [searchParams, user, openConversationWithFriend, acceptedFriends, conversations]);
+  }, [searchParams, user, openConversationWithFriend, acceptedFriends, conversations, setSearchParams]);
 
   // Mark selected conversation as read
   useEffect(() => {
@@ -157,12 +166,13 @@ export function FriendsPage() {
         setSelectedFriend(targetProfile);
       }
       setIsOpeningChat(true);
-      setSearchParams({ tab: 'messages', chat: friendId });
       const convId = await openConversationWithFriend(friendId);
       setSelectedConversationId(convId);
+      handledChatParamRef.current = friendId;
+      setSearchParams({ tab: 'messages', conversationId: convId }, { replace: true });
     } catch (err: any) {
       console.error('Failed to open chat with friend:', err);
-      toast.error(err?.message || 'Could not start conversation with this friend.');
+      showErrorToast(err, 'Could not start conversation with this friend.', 'start_chat_error');
     } finally {
       setIsOpeningChat(false);
     }

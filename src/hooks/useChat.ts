@@ -36,6 +36,8 @@ export function useChat(conversationId: string | null, friendProfile?: Profile |
   const [error, setError] = useState<Error | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const [otherUserLastReadAt, setOtherUserLastReadAt] = useState<string | null>(null);
+  const [otherUserLastDeliveredAt, setOtherUserLastDeliveredAt] = useState<string | null>(null);
+  const [isOtherUserOnline, setIsOtherUserOnline] = useState<boolean>(false);
   const [isFriendshipActive, setIsFriendshipActive] = useState<boolean>(true);
 
   // Check friendship status safely
@@ -122,23 +124,32 @@ export function useChat(conversationId: string | null, friendProfile?: Profile |
       const withSignedUrls = await resolveSignedUrls(chronological);
       setMessages(withSignedUrls);
 
-      // Fetch member read states safely
+      // Fetch member read & delivery states safely
       try {
         const { data: members } = await supabase
           .from('conversation_members')
-          .select('user_id, last_read_at')
+          .select('user_id, last_read_at, last_delivered_at')
           .eq('conversation_id', conversationId);
 
-        members?.forEach((m) => {
+        members?.forEach((m: any) => {
           if (m.user_id !== user.id) {
             setOtherUserLastReadAt(m.last_read_at);
+            if (m.last_delivered_at) {
+              setOtherUserLastDeliveredAt(m.last_delivered_at);
+            }
           }
         });
       } catch {
-        // Safe fallback if conversation_members table not yet migrated
+        // Safe fallback if conversation_members table or last_delivered_at not yet migrated
       }
 
-      // Mark as read immediately on open
+      // Acknowledge delivery & mark as read immediately on open
+      try {
+        await supabase.rpc('acknowledge_message_delivery', { p_conversation_id: conversationId });
+      } catch {
+        // ignore fallback
+      }
+
       try {
         await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
       } catch {
@@ -209,15 +220,42 @@ export function useChat(conversationId: string | null, friendProfile?: Profile |
     }
   }, [user, conversationId, loadingMore, hasMore, messages]);
 
-  // 3. Realtime Subscription
+  // 3. Realtime Subscription & Presence
   useEffect(() => {
     if (!user || !conversationId) return;
 
     const channelName = `chat_room_${conversationId}`;
     setRealtimeStatus('connecting');
 
-    const channel = supabase
-      .channel(channelName)
+    const channel = supabase.channel(channelName, {
+      config: {
+        presence: {
+          key: user.id
+        }
+      }
+    });
+
+    const checkFriendOnline = () => {
+      if (!friendProfile?.id) return;
+      const state = channel.presenceState();
+      const friendPresences = state[friendProfile.id] as any[] | undefined;
+      setIsOtherUserOnline(Boolean(friendPresences && friendPresences.length > 0));
+    };
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        checkFriendOnline();
+      })
+      .on('presence', { event: 'join' }, ({ key }) => {
+        if (friendProfile?.id && key === friendProfile.id) {
+          setIsOtherUserOnline(true);
+        }
+      })
+      .on('presence', { event: 'leave' }, ({ key }) => {
+        if (friendProfile?.id && key === friendProfile.id) {
+          checkFriendOnline();
+        }
+      })
       .on(
         'postgres_changes',
         {
@@ -280,6 +318,7 @@ export function useChat(conversationId: string | null, friendProfile?: Profile |
 
           if (incomingMsg.sender_id !== user.id) {
             try {
+              await supabase.rpc('acknowledge_message_delivery', { p_conversation_id: conversationId });
               await supabase.rpc('mark_conversation_read', { p_conversation_id: conversationId });
             } catch {
               // ignore
@@ -298,22 +337,58 @@ export function useChat(conversationId: string | null, friendProfile?: Profile |
         (payload) => {
           const updatedMember = payload.new as any;
           if (updatedMember.user_id !== user.id) {
-            setOtherUserLastReadAt(updatedMember.last_read_at);
+            if (updatedMember.last_read_at) {
+              setOtherUserLastReadAt(updatedMember.last_read_at);
+            }
+            if (updatedMember.last_delivered_at) {
+              setOtherUserLastDeliveredAt(updatedMember.last_delivered_at);
+            }
           }
         }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          setRealtimeStatus('connected');
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          setRealtimeStatus('disconnected');
+      );
+
+    const trackPresence = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          await channel.track({
+            user_id: user.id,
+            online_at: new Date().toISOString()
+          });
+        } catch {
+          // ignore
         }
-      });
+      } else {
+        try {
+          await channel.untrack();
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      trackPresence();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        setRealtimeStatus('connected');
+        trackPresence();
+      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        setRealtimeStatus('disconnected');
+        setIsOtherUserOnline(false);
+      }
+    });
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      channel.untrack().catch(() => {});
       supabase.removeChannel(channel);
+      setIsOtherUserOnline(false);
     };
-  }, [user, conversationId]);
+  }, [user, conversationId, friendProfile?.id]);
 
   // 4. Send Text Message (Resilient payload)
   const sendTextMessage = async (text: string) => {
@@ -528,6 +603,8 @@ export function useChat(conversationId: string | null, friendProfile?: Profile |
     error,
     realtimeStatus,
     otherUserLastReadAt,
+    otherUserLastDeliveredAt,
+    isOtherUserOnline,
     isFriendshipActive,
     loadOlderMessages,
     sendTextMessage,

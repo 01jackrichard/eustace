@@ -17,8 +17,17 @@ export async function getSignedMessageImageUrl(
 ): Promise<string> {
   if (!imagePath) return '';
 
+  const clean = imagePath.trim();
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return clean;
+  }
+
+  // Strip accidental leading slashes and bucket name prefix
+  const relativePath = clean.replace(/^\/+/, '').replace(/^message-images\//, '').replace(/^\/+/, '');
+  if (!relativePath) return '';
+
   const now = Date.now();
-  const cached = signedUrlCache.get(imagePath);
+  const cached = signedUrlCache.get(relativePath);
 
   // Return cached if valid for at least 5 more minutes
   if (cached && cached.expiresAt > now + 300_000) {
@@ -27,14 +36,14 @@ export async function getSignedMessageImageUrl(
 
   const { data, error } = await supabase.storage
     .from('message-images')
-    .createSignedUrl(imagePath, expiresInSeconds);
+    .createSignedUrl(relativePath, expiresInSeconds);
 
   if (error || !data?.signedUrl) {
     console.error('Failed to create signed URL for message image:', error);
     throw error || new Error('Could not generate secure image URL');
   }
 
-  signedUrlCache.set(imagePath, {
+  signedUrlCache.set(relativePath, {
     url: data.signedUrl,
     expiresAt: now + expiresInSeconds * 1000
   });

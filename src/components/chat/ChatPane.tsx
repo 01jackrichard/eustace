@@ -26,6 +26,8 @@ export function ChatPane({ conversationId, friendProfile, onBack }: ChatPaneProp
     error,
     realtimeStatus,
     otherUserLastReadAt,
+    otherUserLastDeliveredAt,
+    isOtherUserOnline,
     isFriendshipActive,
     loadOlderMessages,
     sendTextMessage,
@@ -120,23 +122,26 @@ export function ChatPane({ conversationId, friendProfile, onBack }: ChatPaneProp
           </div>
         </div>
 
-        {/* CONNECTION STATUS BADGE */}
+        {/* CONNECTION & PRESENCE STATUS BADGE */}
         <div className="flex items-center gap-2 text-[10px] font-medium tracking-wider select-none">
-          {realtimeStatus === 'connected' && (
-            <span className="flex items-center gap-1.5 text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Live
+          {realtimeStatus === 'disconnected' ? (
+            <span className="flex items-center gap-1.5 text-red-400/80 bg-red-500/10 px-2.5 py-0.5 rounded-full border border-red-500/20">
+              <WifiOff size={10} />
+              Reconnecting
             </span>
-          )}
-          {realtimeStatus === 'connecting' && (
-            <span className="flex items-center gap-1.5 text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+          ) : realtimeStatus === 'connecting' ? (
+            <span className="flex items-center gap-1.5 text-amber-400/80 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
               <Loader2 size={10} className="animate-spin" />
               Connecting
             </span>
-          )}
-          {realtimeStatus === 'disconnected' && (
-            <span className="flex items-center gap-1.5 text-red-400/80 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
-              <WifiOff size={10} />
+          ) : isOtherUserOnline ? (
+            <span className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Online
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-textMuted/70 bg-surface/40 px-2.5 py-0.5 rounded-full border border-border/25">
+              <span className="w-1.5 h-1.5 rounded-full bg-textMuted/40" />
               Offline
             </span>
           )}
@@ -219,6 +224,7 @@ export function ChatPane({ conversationId, friendProfile, onBack }: ChatPaneProp
                   message={msg}
                   isOutgoing={isOutgoing}
                   otherUserLastReadAt={otherUserLastReadAt}
+                  otherUserLastDeliveredAt={otherUserLastDeliveredAt}
                   onRetry={retryFailedMessage}
                   onOpenImage={(url) => setActiveEnlargedImage(url)}
                 />

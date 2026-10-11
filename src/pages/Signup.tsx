@@ -217,19 +217,19 @@ export function Signup() {
         <form onSubmit={handleSignup} className="flex flex-col gap-4">
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Name</label>
-            <SmoothInput type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
+            <SmoothInput type="text" placeholder="Enter your full name" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
           </div>
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Username</label>
-            <SmoothInput type="text" value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
+            <SmoothInput type="text" placeholder="Choose a username" value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
           </div>
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Email</label>
-            <SmoothInput type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
+            <SmoothInput type="email" placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
           </div>
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Password</label>
-            <SmoothInput type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
+            <SmoothInput type="password" placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
           </div>
 
           <button type="submit" disabled={loading || googleLoading} className="w-full bg-textMain text-background hover:bg-white font-semibold py-2.5 rounded-xl mt-4 transition-colors flex justify-center items-center h-11 disabled:opacity-50 disabled:hover:bg-textMain">

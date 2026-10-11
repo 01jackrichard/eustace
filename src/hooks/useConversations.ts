@@ -254,75 +254,111 @@ export function useConversations() {
     };
   }, [user, fetchConversations]);
 
-  // Open or create conversation with an accepted friend
+  const inFlightOpenRequestsRef = useRef<Map<string, Promise<string>>>(new Map());
+
+  // Open or create conversation with an accepted friend (Atomic & Race-safe)
   const openConversationWithFriend = useCallback(
     async (friendId: string): Promise<string> => {
       if (!user) throw new Error('Not authenticated');
+      if (!friendId || friendId === user.id) throw new Error('Invalid friend ID');
 
-      try {
-        // 1. First try the secure atomic RPC
-        try {
-          const { data, error: rpcErr } = await supabase.rpc('get_or_create_conversation', {
-            friend_user_id: friendId
-          });
-
-          if (!rpcErr && data && data.length > 0) {
-            const convId = data[0].conversation_id;
-            // Background refetch without blocking UI
-            fetchConversations();
-            return convId;
-          }
-        } catch {
-          // RPC may not be migrated yet, fallback to direct query
-        }
-
-        // 2. Direct query fallback
-        const u1 = user.id < friendId ? user.id : friendId;
-        const u2 = user.id < friendId ? friendId : user.id;
-
-        const { data: existing, error: selectErr } = await supabase
-          .from('conversations')
-          .select('id')
-          .eq('user1_id', u1)
-          .eq('user2_id', u2)
-          .maybeSingle();
-
-        if (selectErr) {
-          console.warn('Select existing conversation warning:', selectErr);
-        }
-
-        if (existing?.id) {
-          fetchConversations();
-          return existing.id;
-        }
-
-        // Insert new conversation
-        const { data: newConv, error: insertErr } = await supabase
-          .from('conversations')
-          .insert({ user1_id: u1, user2_id: u2 })
-          .select('id')
-          .single();
-
-        if (insertErr) throw insertErr;
-
-        // Try adding members if table exists
-        try {
-          await supabase.from('conversation_members').upsert([
-            { conversation_id: newConv.id, user_id: u1, last_read_at: new Date().toISOString() },
-            { conversation_id: newConv.id, user_id: u2, last_read_at: new Date().toISOString() }
-          ]);
-        } catch {
-          // ignore if table not created yet
-        }
-
-        fetchConversations();
-        return newConv.id;
-      } catch (err: any) {
-        console.error('Error starting conversation:', err);
-        throw err;
+      // 1. Deduplicate concurrent in-flight requests for the exact same friend
+      const existingInFlight = inFlightOpenRequestsRef.current.get(friendId);
+      if (existingInFlight) {
+        return existingInFlight;
       }
+
+      const executionPromise = (async () => {
+        try {
+          // Check if conversation already exists in current local state
+          const cachedConv = conversations.find(
+            (c) => c.friend.id === friendId || (c as any).user1_id === friendId || (c as any).user2_id === friendId
+          );
+          if (cachedConv) {
+            return cachedConv.id;
+          }
+
+          // 2. Primary path: Secure atomic PostgreSQL RPC
+          try {
+            const { data, error: rpcErr } = await supabase.rpc('get_or_create_conversation', {
+              friend_user_id: friendId
+            });
+
+            if (!rpcErr && data && data.length > 0) {
+              const convId = data[0].conversation_id;
+              fetchConversations();
+              return convId;
+            }
+          } catch {
+            // RPC not available yet, fall back to direct query
+          }
+
+          // 3. Direct query fallback with canonical user order
+          const u1 = user.id < friendId ? user.id : friendId;
+          const u2 = user.id < friendId ? friendId : user.id;
+
+          const { data: existing } = await supabase
+            .from('conversations')
+            .select('id')
+            .eq('user1_id', u1)
+            .eq('user2_id', u2)
+            .maybeSingle();
+
+          if (existing?.id) {
+            fetchConversations();
+            return existing.id;
+          }
+
+          // 4. Insert new conversation with 23505 duplicate-key race recovery
+          const { data: newConv, error: insertErr } = await supabase
+            .from('conversations')
+            .insert({ user1_id: u1, user2_id: u2 })
+            .select('id')
+            .single();
+
+          if (insertErr) {
+            // If another client or concurrent call inserted at the same time, fetch it
+            if (
+              insertErr.code === '23505' ||
+              insertErr.message?.includes('conversations_unique_pair') ||
+              insertErr.message?.includes('duplicate key')
+            ) {
+              const { data: raceRow } = await supabase
+                .from('conversations')
+                .select('id')
+                .eq('user1_id', u1)
+                .eq('user2_id', u2)
+                .maybeSingle();
+
+              if (raceRow?.id) {
+                fetchConversations();
+                return raceRow.id;
+              }
+            }
+            throw insertErr;
+          }
+
+          // Ensure conversation_members exist
+          try {
+            await supabase.from('conversation_members').upsert([
+              { conversation_id: newConv.id, user_id: u1, last_read_at: new Date().toISOString(), last_delivered_at: new Date().toISOString() },
+              { conversation_id: newConv.id, user_id: u2, last_read_at: new Date().toISOString(), last_delivered_at: new Date().toISOString() }
+            ]);
+          } catch {
+            // safe fallback
+          }
+
+          fetchConversations();
+          return newConv.id;
+        } finally {
+          inFlightOpenRequestsRef.current.delete(friendId);
+        }
+      })();
+
+      inFlightOpenRequestsRef.current.set(friendId, executionPromise);
+      return executionPromise;
     },
-    [user, fetchConversations]
+    [user, conversations, fetchConversations]
   );
 
   // Mark conversation read
