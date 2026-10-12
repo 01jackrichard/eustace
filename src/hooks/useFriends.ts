@@ -9,7 +9,8 @@ export type Profile = {
   display_name: string;
   full_name: string;
   avatar_url: string;
-  bio: string;
+  bio?: string | null;
+  cover_image_url?: string;
   current_streak?: number | null;
 };
 
@@ -64,50 +65,60 @@ export function useFriends() {
 
       const otherUserIds = rels.map(r => r.requester_id === user.id ? r.addressee_id : r.requester_id);
 
-      const { data: profiles, error: profileError } = await supabase.rpc('get_friend_profiles', {
-        user_ids: otherUserIds
-      });
+      // Fetch authoritative profiles directly from public.profiles so authentic bio and cover_image_url
+      // are never stripped, masked, or missing, alongside streak data from RPC or user_stats
+      const [directProfilesRes, rpcProfilesRes, statsRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, username, display_name, full_name, avatar_url, bio, cover_image_url')
+          .in('id', otherUserIds),
+        supabase.rpc('get_friend_profiles', { user_ids: otherUserIds }).then(
+          (res) => res,
+          () => ({ data: null, error: true })
+        ),
+        supabase
+          .from('user_stats')
+          .select('user_id, current_streak')
+          .in('user_id', otherUserIds)
+      ]);
 
-      let resolvedProfiles = profiles;
-      const needsStatsFallback = profileError || (profiles && profiles.length > 0 && typeof profiles[0].current_streak === 'undefined');
+      const directProfiles: any[] = directProfilesRes.data || [];
+      const rpcProfiles: any[] = (rpcProfilesRes && !rpcProfilesRes.error && rpcProfilesRes.data) || [];
+      const statsMap = new Map<string, number | null>((statsRes.data || []).map((s: any) => [s.user_id, s.current_streak]));
+      const rpcStreakMap = new Map<string, number | null>(rpcProfiles.map((p: any) => [p.id, p.current_streak]));
+      const directMap = new Map<string, any>(directProfiles.map((p: any) => [p.id, p]));
+      const rpcMap = new Map<string, any>(rpcProfiles.map((p: any) => [p.id, p]));
 
-      if (needsStatsFallback) {
-        if (profileError) {
-          console.warn('[FRIENDS] get_friend_profiles RPC failed, falling back to direct query:', profileError.message);
-        }
+      const resolvedProfiles: Profile[] = otherUserIds
+        .map((id): Profile | null => {
+          const direct = directMap.get(id);
+          const rpc = rpcMap.get(id);
+          if (!direct && !rpc) return null;
 
-        const [fallbackProfilesRes, fallbackStatsRes] = await Promise.all([
-          profileError ? supabase
-            .from('profiles')
-            .select('id, username, display_name, full_name, avatar_url, bio')
-            .in('id', otherUserIds) : Promise.resolve({ data: profiles, error: null }),
-          supabase
-            .from('user_stats')
-            .select('user_id, current_streak')
-            .in('user_id', otherUserIds)
-        ]);
-
-        const statsMap = new Map((fallbackStatsRes.data || []).map(s => [s.user_id, s.current_streak]));
-        resolvedProfiles = (fallbackProfilesRes.data || []).map((p: any) => {
-          let streak = p.current_streak;
-          if (typeof streak === 'undefined') {
-            if (fallbackStatsRes.error) {
-              streak = null;
-            } else {
-              streak = statsMap.has(p.id) ? statsMap.get(p.id) : 0;
-            }
+          const base = direct || rpc;
+          let streak: number | null = null;
+          if (rpcStreakMap.has(id) && typeof rpcStreakMap.get(id) === 'number') {
+            streak = rpcStreakMap.get(id)!;
+          } else if (statsMap.has(id)) {
+            streak = statsMap.get(id) ?? null;
+          } else if (typeof base?.current_streak === 'number') {
+            streak = base.current_streak;
+          } else {
+            streak = 0;
           }
+
           return {
-            ...p,
-            current_streak: streak
+            id,
+            username: direct?.username || rpc?.username || 'user',
+            display_name: direct?.display_name || rpc?.display_name || 'Friend',
+            full_name: direct?.full_name || rpc?.full_name || '',
+            avatar_url: direct?.avatar_url || rpc?.avatar_url || '',
+            cover_image_url: direct?.cover_image_url || rpc?.cover_image_url || undefined,
+            bio: typeof direct?.bio !== 'undefined' ? direct.bio : (rpc?.bio ?? null),
+            current_streak: streak,
           };
-        });
-      } else if (profiles) {
-        resolvedProfiles = profiles.map((p: any) => ({
-          ...p,
-          current_streak: p.current_streak ?? 0
-        }));
-      }
+        })
+        .filter((p): p is Profile => p !== null);
 
       const combined: Friendship[] = [];
       for (const r of rels) {
@@ -218,6 +229,23 @@ export function useFriends() {
     }
   };
 
+  const handleRemoveFriend = async (friendshipId: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .delete()
+        .eq('id', friendshipId);
+
+      if (error) throw error;
+      toast.success('Connection removed');
+      fetchFriendships();
+    } catch (err: any) {
+      console.error('Failed to remove connection:', err);
+      toast.error('Failed to remove connection');
+    }
+  };
+
   const incomingRequests = friendships.filter(f => f.status === 'pending' && f.addressee_id === user?.id);
   const outgoingRequests = friendships.filter(f => f.status === 'pending' && f.requester_id === user?.id);
   const acceptedFriends = friendships.filter(f => f.status === 'accepted');
@@ -265,6 +293,7 @@ export function useFriends() {
     handleAccept,
     handleDecline,
     handleCancel,
+    handleRemoveFriend,
     getFriendshipStatus
   };
 }

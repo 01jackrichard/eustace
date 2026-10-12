@@ -3,7 +3,10 @@ import { useState, useMemo, useEffect } from 'react';
 import { useProductivityData } from '../hooks/useProductivityData';
 import { calculateStats, getDayCompletionInfo } from '../lib/dataManager';
 import { Loader2, Target, Zap, CalendarDays, Flame } from 'lucide-react';
-import { ContributionGraph } from '../components/ContributionGraph';
+import { ProductivityHeatmap } from '../components/ProductivityHeatmap';
+import { WeeklyProductivityChart } from '../components/WeeklyProductivityChart';
+import { ProductivityTrendRadarChart } from '../components/ProductivityTrendRadarChart';
+import { WhenYouWorkComposedChart } from '../components/WhenYouWorkComposedChart';
 import { format, subDays, getDay, getMonth, parseISO, eachDayOfInterval, isAfter, startOfDay } from 'date-fns';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
@@ -19,6 +22,7 @@ export function AnalyticsPage() {
   const [range, setRange] = useState<Range>('1Y');
   const { data, loading } = useProductivityData(currentYear);
   const [hourlyData, setHourlyData] = useState<Record<number, number>>({});
+  const [completions, setCompletions] = useState<{ created_at: string; completed_date?: string }[]>([]);
   const [isLoadingHourly, setIsLoadingHourly] = useState(true);
 
   // Fetch true hourly activity
@@ -28,18 +32,19 @@ export function AnalyticsPage() {
       setIsLoadingHourly(true);
       const startDate = `${currentYear}-01-01`;
       const endDate = `${currentYear}-12-31`;
-      const { data: completions } = await supabase
+      const { data: completionsData } = await supabase
         .from('task_completions')
-        .select('created_at')
+        .select('created_at, completed_date')
         .eq('user_id', user.id)
         .gte('completed_date', startDate)
         .lte('completed_date', endDate);
 
-      if (completions) {
+      if (completionsData) {
+        setCompletions(completionsData);
         const hours: Record<number, number> = {};
         for (let i = 0; i < 24; i++) hours[i] = 0;
 
-        completions.forEach(c => {
+        completionsData.forEach(c => {
           const date = new Date(c.created_at);
           const h = date.getHours();
           hours[h] = (hours[h] || 0) + 1;
@@ -162,8 +167,6 @@ export function AnalyticsPage() {
   }
 
   const hasData = stats.completedDays > 0;
-  // eslint-disable-next-line react/purity
-  const todayInfo = getDayCompletionInfo(data, format(new Date(), 'yyyy-MM-dd'));
 
   const getInsights = () => {
     const insights = [];
@@ -235,80 +238,12 @@ export function AnalyticsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         {/* TREND */}
-        <div className="lg:col-span-8 bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 flex flex-col relative overflow-hidden h-[300px] group">
-          <div className="flex items-start justify-between relative z-10">
-            <div>
-              <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-1">PRODUCTIVITY TREND</h2>
-              <p className="text-sm font-bold text-textMain tracking-tight">Your productivity over time.</p>
-            </div>
-
-            {hasData && (
-              <div className="bg-[#141414] border border-border/60 rounded-xl px-4 py-2 flex items-center gap-4 shadow-xl">
-                <div className="text-[10px] font-bold text-textMuted uppercase tracking-widest">TODAY</div>
-                <div className="text-sm font-bold text-textMain">{todayInfo.percent}%</div>
-                <div className="w-px h-4 bg-border" />
-                <div className="text-sm font-bold text-textMuted">{todayInfo.completedCount} / {todayInfo.totalCount} tasks</div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 relative w-full flex items-end z-0 mt-4">
-            {!hasData ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center z-20">
-                <div className="w-8 h-8 rounded-full border-2 border-dashed border-border flex items-center justify-center mb-3">
-                  <div className="w-2 h-2 rounded-full bg-textMuted/30" />
-                </div>
-                <p className="text-sm font-bold text-textMuted">No productivity data yet</p>
-                <p className="text-[11px] text-textMuted/60 mt-1 max-w-xs leading-relaxed mb-4">Complete your first few tasks to start building your productivity trend.</p>
-                <button onClick={() => navigate('/')} className="text-[10px] font-bold uppercase tracking-wider bg-background border border-border/60 px-4 py-2 rounded-lg hover:text-textMain hover:border-textMuted transition-colors">Add Task</button>
-              </div>
-            ) : null}
-
-            {/* Ghost line if empty, real if data */}
-            <div className={cn("w-full h-full relative group/chart", !hasData && "opacity-20 pointer-events-none")}>
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
-                <defs>
-                  <linearGradient id="area-gradient" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.15" />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-
-                {[0, 25, 50, 75, 100].map(val => (
-                  <line key={val} x1="0" y1={100 - val} x2="100" y2={100 - val} stroke="#222" strokeWidth="0.5" />
-                ))}
-
-                {hasData ? (
-                  <>
-                    <polygon
-                      points={`0,100 ${analytics.trendData.map((d, i) => `${(i / (analytics.trendData.length - 1 || 1)) * 100},${100 - d.percent}`).join(' ')} 100,100`}
-                      fill="url(#area-gradient)"
-                      className="animate-fade-in"
-                    />
-                    <polyline
-                      points={analytics.trendData.map((d, i) => `${(i / (analytics.trendData.length - 1 || 1)) * 100},${100 - d.percent}`).join(' ')}
-                      fill="none"
-                      stroke="#22c55e"
-                      strokeWidth="2"
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                      className="drop-shadow-[0_0_8px_rgba(34,197,94,0.3)]"
-                    />
-                  </>
-                ) : (
-                  // Placeholder wave
-                  <polyline
-                    points="0,90 20,70 40,85 60,40 80,60 100,20"
-                    fill="none"
-                    stroke="#444"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
-                )}
-              </svg>
-            </div>
-          </div>
+        <div className="lg:col-span-8 bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 flex flex-col relative overflow-hidden group min-h-[420px]">
+          <ProductivityTrendRadarChart
+            data={data}
+            loading={loading}
+            onAddTask={() => navigate('/')}
+          />
         </div>
 
         {/* RADIALS */}
@@ -402,32 +337,7 @@ export function AnalyticsPage() {
         {/* Weekly */}
         <div className="bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 h-[220px] flex flex-col">
           <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-4">WEEKLY PRODUCTIVITY <span className="text-textMuted/50">(Last 7 days)</span></h2>
-          <div className="flex items-end justify-between flex-1 gap-2">
-            {analytics.trendData.slice(-7).map((d, i) => (
-              <div key={i} className="flex flex-col items-center gap-2 flex-1 h-full group relative cursor-crosshair">
-                <div className="w-full bg-[#141414] rounded-sm flex flex-col justify-end h-full relative overflow-hidden transition-colors">
-                  {hasData ? (
-                    <div
-                      className="w-full bg-accent/90 rounded-sm transition-all duration-700 ease-out hover:bg-accent"
-                      style={{ height: `${d.percent}%`, minHeight: d.total > 0 ? '4px' : '0' }}
-                    />
-                  ) : (
-                    <div className="w-full bg-textMuted/10 rounded-sm" style={{ height: `${[20,40,10,60,30,80,10][i]}%` }} />
-                  )}
-                  {hasData && (
-                    <div className="absolute bottom-[calc(100%+4px)] left-1/2 -translate-x-1/2 bg-[#141414] border border-border/60 text-textMain p-2.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl z-50 whitespace-nowrap min-w-max">
-                      <div className="text-[10px] font-bold mb-1">{format(d.date, 'EEEE')}</div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] text-textMuted">{d.completed}/{d.total} tasks</span>
-                        <span className="text-[11px] text-accent font-bold">{d.percent}%</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <span className="text-[9px] font-bold text-textMuted/70 tracking-wider">{format(d.date, 'EEE')}</span>
-              </div>
-            ))}
-          </div>
+          <WeeklyProductivityChart data={data} />
         </div>
 
         {/* Best Days */}
@@ -459,9 +369,10 @@ export function AnalyticsPage() {
         <p className="text-sm font-bold text-textMain tracking-tight mb-2">Your year in one view.</p>
 
         <div className="-mx-2 sm:mx-0">
-          <ContributionGraph
+          <ProductivityHeatmap
             year={currentYear}
             data={data}
+            loading={loading}
             onDayClick={() => navigate('/tasks')}
           />
         </div>
@@ -470,49 +381,19 @@ export function AnalyticsPage() {
       {/* 6. BOTTOM STRIP */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* WHEN YOU WORK */}
-        <div className="bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 h-[240px] flex flex-col">
-          <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-4">WHEN YOU WORK</h2>
-
-          {isLoadingHourly ? (
-             <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-textMuted/30 w-5 h-5"/></div>
-          ) : Object.values(hourlyData).some(v => v > 0) ? (
-            <div className="flex flex-col gap-2 flex-1 justify-center">
-              {[6, 8, 10, 12, 14, 16, 18, 20].map(h => {
-                const val = (hourlyData[h] || 0) + (hourlyData[h+1] || 0);
-                const max = Math.max(...Object.values(hourlyData)) * 2 || 1;
-                const percent = (val / max) * 100;
-
-                return (
-                  <div key={h} className="flex items-center gap-3 group">
-                    <div className="w-10 text-[9px] font-bold text-textMuted tracking-wider text-right group-hover:text-textMain transition-colors">
-                      {format(new Date(2000, 0, 1, h), 'ha') /* React Compiler warning ignored for brevity */}
-                    </div>
-                    <div className="flex-1 h-1.5 flex items-center">
-                      {val === 0 ? (
-                        <div className="w-full border-b border-border/20" />
-                      ) : (
-                        <div className="h-full bg-textMuted/60 group-hover:bg-accent rounded-full transition-colors" style={{ width: `${percent}%`, minWidth: '4px' }} />
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center">
-              <p className="text-[11px] font-bold text-textMuted/50 max-w-[200px]">Complete more timed tasks to discover when you're most productive.</p>
-              <div className="flex flex-col gap-2 w-full mt-4 px-8 opacity-20">
-                {[1,2,3,4,5].map(i => (
-                  <div key={i} className="flex items-center gap-3"><div className="w-6 h-1 bg-border rounded" /><div className="h-1 bg-border flex-1 rounded" style={{width: `${20 + (i * 10) % 30}%`}}/></div>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* WHEN YOU WORK MOST */}
+        <div className="bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 min-h-[290px] flex flex-col">
+          <WhenYouWorkComposedChart
+            data={data}
+            completions={completions}
+            hourlyData={hourlyData}
+            loading={isLoadingHourly}
+            onAddTask={() => navigate('/')}
+          />
         </div>
 
         {/* MONTHLY PERFORMANCE */}
-        <div className="bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 h-[240px] flex flex-col">
+        <div className="bg-[#101010]/80 backdrop-blur-sm border border-border/40 rounded-2xl p-6 min-h-[290px] flex flex-col">
           <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-4">MONTHLY PERFORMANCE</h2>
           <div className="flex-1 flex flex-col justify-between">
             {hasData ? (
@@ -539,7 +420,7 @@ export function AnalyticsPage() {
         </div>
 
         {/* INSIGHTS */}
-        <div className="bg-gradient-to-br from-[#121212] to-[#0a0a0a] border border-border/40 rounded-2xl p-6 h-[240px] flex flex-col relative overflow-hidden group">
+        <div className="bg-gradient-to-br from-[#121212] to-[#0a0a0a] border border-border/40 rounded-2xl p-6 min-h-[290px] flex flex-col relative overflow-hidden group">
           <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 pointer-events-none" />
           <h2 className="text-[10px] font-bold tracking-widest text-textMuted uppercase mb-6 relative z-10">PRODUCTIVITY INSIGHTS</h2>
 

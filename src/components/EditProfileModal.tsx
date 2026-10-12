@@ -145,7 +145,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
       full_name: displayName,
       avatar_url: avatarUrl,
       cover_image_url: coverUrl,
-      bio,
+      bio: bio?.trim() ? bio.trim() : null,
       visibility: 'public',
       updated_at: new Date().toISOString(),
     };
