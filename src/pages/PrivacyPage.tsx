@@ -64,6 +64,24 @@ export function PrivacyPage() {
               We utilize Supabase for identity management and PostgreSQL database hosting. We do not sell, rent, or monetize your personal data or productivity logs with advertising third parties.
             </p>
           </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold text-white tracking-tight">6. Cookies & Local Storage</h2>
+            <p>
+              Eustace does not use third-party tracking, advertising cookies, or behavioral telemetry. We only utilize strictly necessary local storage and encrypted session tokens essential for application functionality:
+            </p>
+            <ul className="list-disc list-inside space-y-1.5 ml-2">
+              <li>
+                <strong className="text-white font-mono text-xs">sb-*-auth-token:</strong> Essential encrypted Supabase JWT session credentials used to keep you securely signed in.
+              </li>
+              <li>
+                <strong className="text-white font-mono text-xs">eustace_cookie_consent:</strong> Consent acknowledgment flag recording your agreement to strictly necessary storage.
+              </li>
+              <li>
+                <strong className="text-white font-mono text-xs">eustace_public_intro:</strong> Intro animation state flag preserving your workspace interface preferences.
+              </li>
+            </ul>
+          </section>
         </div>
 
         <div className="mt-12 pt-8 border-t border-[#1c1c1c] text-xs text-[#666666] flex justify-between items-center">

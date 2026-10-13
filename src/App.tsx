@@ -4,6 +4,7 @@ import { ProtectedLayout } from './components/Layout';
 import { Toaster } from 'react-hot-toast';
 import { PWAReloadPrompt } from './components/PWAReloadPrompt';
 import { InstallPrompt } from './components/InstallPrompt';
+import { CookieConsent } from './components/CookieConsent';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useGlobalShortcuts } from './hooks/useGlobalShortcuts';
 import { Loader2 } from 'lucide-react';
@@ -66,6 +67,7 @@ function App() {
       }} />
       <InstallPrompt />
       <PWAReloadPrompt />
+      <CookieConsent />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Landing />} />

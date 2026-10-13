@@ -62,16 +62,24 @@ export function FolderModal({
   title?: string;
   submitText?: string;
 }) {
-  const [name, setName] = useState(initialName);
+  const [name, setName] = useState(initialName || '');
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) {
+      setName(initialName || '');
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
-      setName(initialName);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
     }
-  }, [isOpen, initialName]);
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,18 +259,26 @@ export function EditTagsModal({
   onSave: (tags: string[]) => Promise<void>;
   initialTags: string[];
 }) {
-  const [tags, setTags] = useState<string[]>(initialTags);
+  const [tags, setTags] = useState<string[]>(initialTags || []);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setTags(initialTags || []);
       setInput('');
-      setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [isOpen, initialTags]);
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();

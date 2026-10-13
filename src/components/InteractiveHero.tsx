@@ -67,10 +67,14 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
 
   const displayName = (profile?.display_name || (profile?.display_name || profile?.full_name) || profile?.username || 'FRIEND').split(' ')[0].toUpperCase();
 
-  const now = new Date();
-  const dateString = format(now, 'dd MMM yyyy').toUpperCase();
-  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
-  const isLeapYear = now.getFullYear() % 4 === 0 && (now.getFullYear() % 100 !== 0 || now.getFullYear() % 400 === 0);
+  const [{ dateString, dayOfWeek, dayOfYear, isLeapYear }] = useState(() => {
+    const now = new Date();
+    const ds = format(now, 'dd MMM yyyy').toUpperCase();
+    const dow = format(now, 'EEEE').toUpperCase();
+    const doy = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
+    const leap = now.getFullYear() % 4 === 0 && (now.getFullYear() % 100 !== 0 || now.getFullYear() % 400 === 0);
+    return { dateString: ds, dayOfWeek: dow, dayOfYear: doy, isLeapYear: leap };
+  });
 
   return (
     <div
@@ -149,7 +153,7 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
                   {scrambledText.split('').map((char, i) => (
                     <span key={i} className={cn(
                       "inline-block transition-all duration-75",
-                      phase === 'scramble' && Math.random() > 0.5 && "text-white/80 transform translate-x-[1px] skew-x-2 blur-[1px]"
+                      phase === 'scramble' && (char.charCodeAt(0) + i) % 2 === 0 && "text-white/80 transform translate-x-[1px] skew-x-2 blur-[1px]"
                     )}>
                       {char}
                     </span>
@@ -205,7 +209,7 @@ export function InteractiveHero({ stats, todayInfo, onActivated }: InteractiveHe
                     >
                        <span className="text-[10px] font-bold tracking-[0.3em] text-white/40 uppercase mb-4">TODAY</span>
                        <span className="text-xl md:text-2xl font-bold tracking-widest text-white uppercase">{dateString}</span>
-                       <span className="text-sm font-bold tracking-[0.2em] text-white/60 uppercase">{format(now, 'EEEE')}</span>
+                       <span className="text-sm font-bold tracking-[0.2em] text-white/60 uppercase">{dayOfWeek}</span>
                        <span className="text-[10px] font-bold tracking-[0.15em] text-white/40 uppercase mt-4">DAY {dayOfYear} / {isLeapYear ? 366 : 365}</span>
                     </motion.div>
 
