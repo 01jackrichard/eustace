@@ -11,7 +11,9 @@ import { Loader2 } from 'lucide-react';
 function safeLazy<T extends ComponentType<any>>(importFn: () => Promise<{ default: T }>) {
   return lazy(async () => {
     try {
-      return await importFn();
+      const component = await importFn();
+      sessionStorage.removeItem('eustace_chunk_reload');
+      return component;
     } catch (error: any) {
       const isChunkError =
         error?.message?.includes('dynamically imported module') ||

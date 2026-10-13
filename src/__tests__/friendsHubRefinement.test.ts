@@ -1,4 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
+import {
+  formatUsernameAsDisplayName,
+  resolveProfileDisplayName,
+  getProfileInitials,
+  type Friendship,
+} from '../hooks/useFriends';
+import { FriendCard } from '../components/friends/FriendCard';
+import { PendingRequestsSidebar } from '../components/friends/PendingRequestsSidebar';
+import { PeopleYouMayKnowSidebar } from '../components/friends/PeopleYouMayKnowSidebar';
+import { RequestsView } from '../components/friends/RequestsView';
 
 describe('Friends Hub Data Logic & Refinement Tests', () => {
   // Mock data representing database rows
@@ -264,6 +277,284 @@ describe('Friends Hub Data Logic & Refinement Tests', () => {
       expect(prepareUpdates('usr-1', '  New custom bio  ').bio).toBe('New custom bio');
       expect(prepareUpdates('usr-1', '   ').bio).toBeNull();
       expect(prepareUpdates('usr-1', '').bio).toBeNull();
+    });
+  });
+
+  describe('Friend Display Name Resolution & Username Fallback Formatting', () => {
+    it('always preserves an actual display_name when one exists without overwriting it', () => {
+      expect(
+        resolveProfileDisplayName({
+          display_name: 'Emory Voss II Re',
+          full_name: 'Emory Voss',
+          username: '4btc',
+        })
+      ).toBe('Emory Voss II Re');
+
+      expect(
+        resolveProfileDisplayName({
+          display_name: 'Jack Richard',
+          full_name: null,
+          username: 'jack',
+        })
+      ).toBe('Jack Richard');
+    });
+
+    it('uses full_name when display_name is null, empty, whitespace, or generic "Friend"', () => {
+      // Matches real production profile rows where display_name is null and full_name holds the user's name
+      expect(
+        resolveProfileDisplayName({
+          display_name: null,
+          full_name: 'Sathish P E ',
+          username: 'Sathish_420',
+        })
+      ).toBe('Sathish P E');
+
+      expect(
+        resolveProfileDisplayName({
+          display_name: null,
+          full_name: 'Alston Reuel. A',
+          username: 'Zenertron',
+        })
+      ).toBe('Alston Reuel. A');
+
+      expect(
+        resolveProfileDisplayName({
+          display_name: '',
+          full_name: 'Richard',
+          username: 'richard',
+        })
+      ).toBe('Richard');
+
+      expect(
+        resolveProfileDisplayName({
+          display_name: 'Friend',
+          full_name: 'Sathish P E',
+          username: 'Sathish_420',
+        })
+      ).toBe('Sathish P E');
+    });
+
+    it('derives a clean, readable fallback name from username when both display_name and full_name are empty or null', () => {
+      expect(formatUsernameAsDisplayName('SATHISH_420')).toBe('Sathish 420');
+      expect(formatUsernameAsDisplayName('sathish_420')).toBe('Sathish 420');
+      expect(formatUsernameAsDisplayName('ZENERTRON')).toBe('Zenertron');
+      expect(formatUsernameAsDisplayName('RICHARD')).toBe('Richard');
+      expect(formatUsernameAsDisplayName('@john.doe-99')).toBe('John Doe 99');
+
+      expect(
+        resolveProfileDisplayName({
+          display_name: null,
+          full_name: null,
+          username: 'SATHISH_420',
+        })
+      ).toBe('Sathish 420');
+
+      expect(
+        resolveProfileDisplayName({
+          display_name: '   ',
+          full_name: '',
+          username: 'ZENERTRON',
+        })
+      ).toBe('Zenertron');
+
+      expect(
+        resolveProfileDisplayName({
+          display_name: null,
+          full_name: undefined,
+          username: 'RICHARD',
+        })
+      ).toBe('Richard');
+    });
+
+    it('falls back to "Friend" only when display_name, full_name, and username are all missing or generic "user"', () => {
+      expect(resolveProfileDisplayName({ display_name: null, full_name: null, username: null })).toBe('Friend');
+      expect(resolveProfileDisplayName({ display_name: '', full_name: '', username: 'user' })).toBe('Friend');
+      expect(resolveProfileDisplayName(null)).toBe('Friend');
+    });
+
+    it('derives avatar initials from the resolved display name instead of generic "FR"', () => {
+      expect(
+        getProfileInitials({
+          display_name: null,
+          full_name: 'Alston Reuel. A',
+          username: 'Zenertron',
+        })
+      ).toBe('AL');
+
+      expect(
+        getProfileInitials({
+          display_name: null,
+          full_name: null,
+          username: 'SATHISH_420',
+        })
+      ).toBe('SA');
+
+      expect(
+        getProfileInitials({
+          display_name: null,
+          full_name: 'Richard',
+          username: 'richard',
+        })
+      ).toBe('RI');
+    });
+
+    it('renders FriendCard with actual names, readable username fallbacks, avatars, online status, and actions', () => {
+      const fullNameFriendship: Friendship = {
+        id: 'f-sathish',
+        requester_id: CURRENT_USER_ID,
+        addressee_id: 'u-sathish',
+        status: 'accepted',
+        created_at: '2026-10-01T00:00:00Z',
+        profiles: {
+          id: 'u-sathish',
+          username: 'Sathish_420',
+          display_name: resolveProfileDisplayName({
+            display_name: null,
+            full_name: 'Sathish P E ',
+            username: 'Sathish_420',
+          }),
+          full_name: 'Sathish P E',
+          avatar_url: '',
+          bio: null,
+          current_streak: 3,
+        },
+      };
+
+      const usernameFallbackFriendship: Friendship = {
+        id: 'f-zenertron',
+        requester_id: CURRENT_USER_ID,
+        addressee_id: 'u-zenertron',
+        status: 'accepted',
+        created_at: '2026-10-02T00:00:00Z',
+        profiles: {
+          id: 'u-zenertron',
+          username: 'ZENERTRON',
+          display_name: resolveProfileDisplayName({
+            display_name: null,
+            full_name: null,
+            username: 'ZENERTRON',
+          }),
+          full_name: '',
+          avatar_url: 'https://example.com/zenertron-avatar.webp',
+          bio: 'Focused every day',
+          current_streak: 7,
+        },
+      };
+
+      const htmlFullNameCard = renderToStaticMarkup(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(FriendCard, {
+            friendship: fullNameFriendship,
+            isOnline: true,
+            viewMode: 'grid',
+            onMessage: vi.fn(),
+            onRemoveFriend: vi.fn(),
+          })
+        )
+      );
+
+      expect(htmlFullNameCard).toContain('Sathish P E');
+      expect(htmlFullNameCard).toContain('@Sathish_420');
+      expect(htmlFullNameCard).not.toContain('>Friend<');
+      expect(htmlFullNameCard).toContain('Message');
+
+      const htmlAvatarAndFallbackCard = renderToStaticMarkup(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(FriendCard, {
+            friendship: usernameFallbackFriendship,
+            isOnline: false,
+            viewMode: 'list',
+            onMessage: vi.fn(),
+            onRemoveFriend: vi.fn(),
+          })
+        )
+      );
+
+      expect(htmlAvatarAndFallbackCard).toContain('Zenertron');
+      expect(htmlAvatarAndFallbackCard).toContain('@ZENERTRON');
+      expect(htmlAvatarAndFallbackCard).toContain('https://example.com/zenertron-avatar.webp');
+      expect(htmlAvatarAndFallbackCard).toContain('Focused every day');
+      expect(htmlAvatarAndFallbackCard).not.toContain('>Friend<');
+    });
+
+    it('renders PendingRequestsSidebar, PeopleYouMayKnowSidebar, and RequestsView with resolved names and existing actions', () => {
+      const pendingReq: Friendship = {
+        id: 'req-richard',
+        requester_id: 'u-richard',
+        addressee_id: CURRENT_USER_ID,
+        status: 'pending',
+        created_at: '2026-10-03T00:00:00Z',
+        profiles: {
+          id: 'u-richard',
+          username: 'richard',
+          display_name: '',
+          full_name: 'Richard',
+          avatar_url: '',
+          bio: null,
+        },
+      };
+
+      const sidebarHtml = renderToStaticMarkup(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(PendingRequestsSidebar, {
+            incomingRequests: [pendingReq],
+            onAccept: vi.fn(),
+            onDecline: vi.fn(),
+            onViewAll: vi.fn(),
+          })
+        )
+      );
+      expect(sidebarHtml).toContain('Richard');
+      expect(sidebarHtml).toContain('@richard');
+      expect(sidebarHtml).not.toContain('>Friend<');
+
+      const requestsViewHtml = renderToStaticMarkup(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(RequestsView, {
+            incomingRequests: [pendingReq],
+            outgoingRequests: [],
+            onAccept: vi.fn(),
+            onDecline: vi.fn(),
+            onCancel: vi.fn(),
+          })
+        )
+      );
+      expect(requestsViewHtml).toContain('Richard');
+      expect(requestsViewHtml).toContain('Accept');
+      expect(requestsViewHtml).toContain('Decline');
+
+      const suggestedHtml = renderToStaticMarkup(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(PeopleYouMayKnowSidebar, {
+            suggestedUsers: [
+              {
+                id: 'u-sathish',
+                username: 'SATHISH_420',
+                display_name: '',
+                full_name: '',
+                avatar_url: '',
+                mutualCount: 2,
+              },
+            ],
+            onAddFriend: vi.fn(),
+            onViewAll: vi.fn(),
+            requestedUserIds: new Set<string>(),
+          })
+        )
+      );
+      expect(suggestedHtml).toContain('Sathish 420');
+      expect(suggestedHtml).toContain('@SATHISH_420');
+      expect(suggestedHtml).toContain('Add');
     });
   });
 });

@@ -5,6 +5,39 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Loader2, Mail, ExternalLink, ArrowLeft } from 'lucide-react';
 
+export const SIGNUP_USERNAME_TAKEN_ERROR = 'Username is already taken. Please choose another.';
+export const SIGNUP_USERNAME_VERIFY_ERROR =
+  'Could not verify username availability. Please try again.';
+
+export async function verifySignupUsernameAvailability(
+  cleanUsername: string,
+  client: {
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>
+    ) => PromiseLike<{ data: unknown; error: unknown }>;
+  } = supabase
+): Promise<{ available: boolean; error: string | null }> {
+  try {
+    const { data: rpcAvailable, error: rpcError } = await client.rpc(
+      'check_username_available',
+      {
+        target_username: cleanUsername,
+      }
+    );
+
+    if (!rpcError && typeof rpcAvailable === 'boolean') {
+      return rpcAvailable
+        ? { available: true, error: null }
+        : { available: false, error: SIGNUP_USERNAME_TAKEN_ERROR };
+    }
+
+    return { available: false, error: SIGNUP_USERNAME_VERIFY_ERROR };
+  } catch {
+    return { available: false, error: SIGNUP_USERNAME_VERIFY_ERROR };
+  }
+}
+
 export function Signup() {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -71,26 +104,10 @@ export function Signup() {
       return;
     }
 
-    // Check if username exists via SECURITY DEFINER RPC (bypasses RLS visibility)
-    let isAvailable = true;
-    try {
-      const { data: rpcAvailable, error: rpcError } = await supabase.rpc('check_username_available', {
-        target_username: cleanUsername
-      });
-      if (!rpcError && typeof rpcAvailable === 'boolean') {
-        isAvailable = rpcAvailable;
-      } else {
-        // Fallback check
-        const { data: existingUser } = await supabase.from('profiles').select('id').eq('username', cleanUsername).maybeSingle();
-        if (existingUser) isAvailable = false;
-      }
-    } catch {
-      const { data: existingUser } = await supabase.from('profiles').select('id').eq('username', cleanUsername).maybeSingle();
-      if (existingUser) isAvailable = false;
-    }
-
-    if (!isAvailable) {
-      setError('Username is already taken. Please choose another.');
+    // Check if username exists via SECURITY DEFINER RPC (bypasses RLS visibility; fail-closed on RPC error)
+    const availability = await verifySignupUsernameAvailability(cleanUsername);
+    if (!availability.available) {
+      setError(availability.error || SIGNUP_USERNAME_VERIFY_ERROR);
       setLoading(false);
       return;
     }
@@ -123,7 +140,8 @@ export function Signup() {
           full_name: name.trim(),
           display_name: name.trim(),
           visibility: 'public',
-          activity_visibility: 'public'
+          activity_visibility: 'public',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
         }, { onConflict: 'id' });
         navigate('/dashboard');
       } else {

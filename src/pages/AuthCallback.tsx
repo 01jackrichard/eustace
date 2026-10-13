@@ -10,6 +10,17 @@ export function AuthCallback() {
 
   useEffect(() => {
     let mounted = true;
+    let subscription: { unsubscribe: () => void } | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let redirectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const triggerSuccessRedirect = () => {
+      if (!mounted) return;
+      setStatus('success');
+      redirectTimer = setTimeout(() => {
+        if (mounted) navigate('/dashboard', { replace: true });
+      }, 800);
+    };
 
     async function handleAuth() {
       try {
@@ -21,43 +32,26 @@ export function AuthCallback() {
         }
 
         if (session) {
-          if (mounted) {
-            setStatus('success');
-            setTimeout(() => {
-              if (mounted) navigate('/dashboard', { replace: true });
-            }, 800);
-          }
+          triggerSuccessRedirect();
           return;
         }
 
         // Listen for session exchange
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
           if (!mounted) return;
-          if (event === 'SIGNED_IN' && session) {
-            setStatus('success');
-            setTimeout(() => {
-              if (mounted) navigate('/dashboard', { replace: true });
-            }, 800);
-          } else if (event === 'USER_UPDATED' && session) {
-            setStatus('success');
-            setTimeout(() => {
-              if (mounted) navigate('/dashboard', { replace: true });
-            }, 800);
+          if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && newSession) {
+            triggerSuccessRedirect();
           }
         });
+        subscription = data.subscription;
 
         // Timeout fallback after 6 seconds
-        const timeout = setTimeout(() => {
-          if (mounted && status === 'verifying') {
+        timeoutId = setTimeout(() => {
+          if (mounted) {
             setStatus('error');
             setErrorMessage('Session verification timed out. Please try logging in directly.');
           }
         }, 6000);
-
-        return () => {
-          subscription.unsubscribe();
-          clearTimeout(timeout);
-        };
       } catch (err: any) {
         if (mounted) {
           setStatus('error');
@@ -70,8 +64,11 @@ export function AuthCallback() {
 
     return () => {
       mounted = false;
+      if (subscription) subscription.unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
+      if (redirectTimer) clearTimeout(redirectTimer);
     };
-  }, [navigate, status]);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background animate-fade-in">

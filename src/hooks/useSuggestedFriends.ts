@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Friendship, Profile } from './useFriends';
+import {
+  type Friendship,
+  type Profile,
+  resolveProfileDisplayName,
+} from './useFriends';
 
 export interface SuggestedProfile extends Profile {
   mutualCount: number;
@@ -74,7 +78,7 @@ export function useSuggestedFriends(
             .map((p: any) => ({
               id: p.id,
               username: p.username,
-              display_name: p.display_name || p.full_name || p.username,
+              display_name: resolveProfileDisplayName(p),
               full_name: p.full_name || '',
               avatar_url: p.avatar_url || '',
               bio: p.bio || '',
@@ -111,6 +115,8 @@ export function useSuggestedFriends(
 
       const finalSuggested: SuggestedProfile[] = eligibleProfiles.map((p) => ({
         ...p,
+        display_name: resolveProfileDisplayName(p),
+        full_name: p.full_name || '',
         mutualCount: 0,
       }));
 

@@ -48,6 +48,11 @@ export function useProductivityData(year: number) {
           } catch {}
         }
 
+        const rawStartTime = t.start_time ? String(t.start_time).slice(0, 5) : meta.startTime;
+        if (rawStartTime) {
+          meta.startTime = rawStartTime;
+        }
+
         const task: Task = {
           id: t.id,
           name: t.name,
@@ -56,7 +61,8 @@ export function useProductivityData(year: number) {
           recurring: t.recurring,
           createdAt: t.created_at.split('T')[0],
           description: t.description,
-          metadata: meta
+          metadata: meta,
+          startTime: rawStartTime
         };
 
         if (t.recurring !== 'none') {
@@ -104,22 +110,79 @@ export function useProductivityData(year: number) {
   const addTask = async (taskData: Omit<Task, 'id'>) => {
     if (!user || !data) return false;
 
-    const { data: inserted, error } = await supabase
+    const rawStartTime = taskData.metadata?.startTime || taskData.startTime || null;
+    const insertPayload: Record<string, any> = {
+      user_id: user.id,
+      name: taskData.name,
+      category: taskData.category,
+      duration: taskData.duration,
+      recurring: taskData.recurring,
+      created_at: taskData.createdAt,
+      description: taskData.description,
+      start_time: rawStartTime
+    };
+
+    let { data: inserted, error } = await supabase
       .from('tasks')
-      .insert({
-        user_id: user.id,
-        name: taskData.name,
-        category: taskData.category,
-        duration: taskData.duration,
-        recurring: taskData.recurring,
-        created_at: taskData.createdAt,
-        description: taskData.description
-      }).select().single();
+      .insert(insertPayload)
+      .select()
+      .single();
+
+    // Backward-compatibility fallback if start_time column is not yet deployed to live schema
+    if (error && (error.code === 'PGRST204' || error.message?.includes('start_time'))) {
+      delete insertPayload.start_time;
+      const retry = await supabase
+        .from('tasks')
+        .insert(insertPayload)
+        .select()
+        .single();
+      inserted = retry.data;
+      error = retry.error;
+    }
+
+    // Backward-compatibility fallback if recurring check constraint does not permit 'monthly' or 'yearly'
+    if (
+      error &&
+      (error.code === '23514' || error.message?.includes('tasks_recurring_check') || error.message?.includes('recurring')) &&
+      (insertPayload.recurring === 'monthly' || insertPayload.recurring === 'yearly')
+    ) {
+      const origRecurring = insertPayload.recurring;
+      insertPayload.recurring = 'custom';
+      try {
+        const meta = insertPayload.description ? JSON.parse(insertPayload.description) : {};
+        if (!meta.rrule) {
+          meta.rrule = origRecurring === 'monthly' ? 'RRULE:FREQ=MONTHLY' : 'RRULE:FREQ=YEARLY';
+          insertPayload.description = JSON.stringify(meta);
+        }
+      } catch {}
+
+      const retry = await supabase
+        .from('tasks')
+        .insert(insertPayload)
+        .select()
+        .single();
+      inserted = retry.data;
+      error = retry.error;
+    }
+
+    if (error && (error.code === 'PGRST204' || error.message?.includes('start_time')) && 'start_time' in insertPayload) {
+      delete insertPayload.start_time;
+      const retry = await supabase
+        .from('tasks')
+        .insert(insertPayload)
+        .select()
+        .single();
+      inserted = retry.data;
+      error = retry.error;
+    }
 
     if (inserted && !error) {
       let meta: TaskMetadata = {};
       if (inserted.description) {
         try { meta = JSON.parse(inserted.description); } catch {}
+      }
+      if (rawStartTime) {
+        meta.startTime = rawStartTime;
       }
 
       const newTask: Task = {
@@ -130,7 +193,8 @@ export function useProductivityData(year: number) {
         recurring: inserted.recurring,
         createdAt: inserted.created_at.split('T')[0],
         description: inserted.description,
-        metadata: meta
+        metadata: meta,
+        startTime: rawStartTime || undefined
       };
 
       const newData = structuredClone(data);
@@ -143,39 +207,99 @@ export function useProductivityData(year: number) {
       setData(newData);
       return true;
     } else {
-      toast.error('Failed to create task');
+      toast.error(error?.message || 'Failed to create task');
       return false;
     }
   };
 
   const updateTask = async (task: Task) => {
     if (!user || !data) return false;
-    const { data: updated, error } = await supabase
+    const rawStartTime = task.metadata?.startTime || task.startTime || null;
+    const updatePayload: Record<string, any> = {
+      name: task.name,
+      category: task.category,
+      duration: task.duration,
+      recurring: task.recurring,
+      description: task.description,
+      start_time: rawStartTime
+    };
+
+    let { data: updated, error } = await supabase
       .from('tasks')
-      .update({
-        name: task.name,
-        category: task.category,
-        duration: task.duration,
-        recurring: task.recurring,
-        description: task.description
-      })
+      .update(updatePayload)
       .match({ id: task.id, user_id: user.id })
-      .select().single();
+      .select()
+      .single();
+
+    if (error && (error.code === 'PGRST204' || error.message?.includes('start_time'))) {
+      delete updatePayload.start_time;
+      const retry = await supabase
+        .from('tasks')
+        .update(updatePayload)
+        .match({ id: task.id, user_id: user.id })
+        .select()
+        .single();
+      updated = retry.data;
+      error = retry.error;
+    }
+
+    if (
+      error &&
+      (error.code === '23514' || error.message?.includes('tasks_recurring_check') || error.message?.includes('recurring')) &&
+      (updatePayload.recurring === 'monthly' || updatePayload.recurring === 'yearly')
+    ) {
+      const origRecurring = updatePayload.recurring;
+      updatePayload.recurring = 'custom';
+      try {
+        const meta = updatePayload.description ? JSON.parse(updatePayload.description) : {};
+        if (!meta.rrule) {
+          meta.rrule = origRecurring === 'monthly' ? 'RRULE:FREQ=MONTHLY' : 'RRULE:FREQ=YEARLY';
+          updatePayload.description = JSON.stringify(meta);
+        }
+      } catch {}
+
+      const retry = await supabase
+        .from('tasks')
+        .update(updatePayload)
+        .match({ id: task.id, user_id: user.id })
+        .select()
+        .single();
+      updated = retry.data;
+      error = retry.error;
+    }
+
+    if (error && (error.code === 'PGRST204' || error.message?.includes('start_time')) && 'start_time' in updatePayload) {
+      delete updatePayload.start_time;
+      const retry = await supabase
+        .from('tasks')
+        .update(updatePayload)
+        .match({ id: task.id, user_id: user.id })
+        .select()
+        .single();
+      updated = retry.data;
+      error = retry.error;
+    }
 
     if (updated && !error) {
+      const newTask: Task = {
+        ...task,
+        recurring: updated.recurring,
+        description: updated.description,
+        startTime: rawStartTime || undefined
+      };
       const newData = structuredClone(data);
-      if (task.recurring !== 'none') {
-        newData.recurringTasks = newData.recurringTasks.map(t => t.id === task.id ? task : t);
+      if (newTask.recurring !== 'none') {
+        newData.recurringTasks = newData.recurringTasks.map(t => t.id === newTask.id ? newTask : t);
       } else {
-        const dateStr = task.createdAt;
+        const dateStr = newTask.createdAt;
         if (newData.days[dateStr]) {
-          newData.days[dateStr].tasks = newData.days[dateStr].tasks.map(t => t.id === task.id ? task : t);
+          newData.days[dateStr].tasks = newData.days[dateStr].tasks.map(t => t.id === newTask.id ? newTask : t);
         }
       }
       setData(newData);
       return true;
     } else {
-      toast.error('Failed to update task');
+      toast.error(error?.message || 'Failed to update task');
       return false;
     }
   };
@@ -201,7 +325,7 @@ export function useProductivityData(year: number) {
       const { error } = await supabase.from('task_completions').delete().match({ user_id: user.id, task_id: taskId, completed_date: dateStr });
       if (error) {
         setData(previousData);
-        toast.error('Failed to update task status');
+        toast.error(error.message || 'Failed to update task status');
       }
     } else {
       newData.days[dateStr].completedTaskIds.push(taskId);
@@ -209,7 +333,7 @@ export function useProductivityData(year: number) {
       const { error } = await supabase.from('task_completions').insert({ user_id: user.id, task_id: taskId, completed_date: dateStr });
       if (error) {
         setData(previousData);
-        toast.error('Failed to update task status');
+        toast.error(error.message || 'Failed to update task status');
       }
     }
   };
@@ -298,7 +422,7 @@ export function useProductivityData(year: number) {
     );
     if (error) {
       setData(previousData);
-      toast.error('Failed to update completion status');
+      toast.error(error.message || 'Failed to update completion status');
     }
   };
 

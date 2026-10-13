@@ -1,41 +1,39 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName.toLowerCase();
+  return (
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    tagName === 'select' ||
+    target.isContentEditable ||
+    Boolean(target.closest('[contenteditable="true"]'))
+  );
+}
 
 export function useGlobalShortcuts() {
   const navigate = useNavigate();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Do not intercept keystrokes while the user is actively typing in inputs or text areas
+      if (isEditableTarget(e.target)) return;
+
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
 
-      if (!isCmdOrCtrl) return;
-
-      // Handle specific key codes
-      switch (e.key.toLowerCase()) {
-        case 'p':
-          e.preventDefault();
-          toast('Command Palette coming soon!', { icon: '⌨️' });
-          break;
-        case 'o':
-          e.preventDefault();
-          toast('Quick Switcher coming soon!', { icon: '⌨️' });
-          break;
-        case 'g':
-          e.preventDefault();
-          toast('Graph View coming soon!', { icon: '⌨️' });
-          break;
-        case 'n':
-          e.preventDefault();
-          navigate('/notes');
-          break;
-        case ',':
-          e.preventDefault();
-          navigate('/settings');
-          break;
+      if (isCmdOrCtrl) {
+        // Supported global navigation shortcuts (avoid intercepting native browser hotkeys like P, O, G)
+        switch (e.key.toLowerCase()) {
+          case ',':
+            e.preventDefault();
+            navigate('/settings');
+            break;
+        }
       }
 
-      // Handle Back/Forward
+      // Alt + Left / Right for historical navigation
       if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault();
         navigate(-1);

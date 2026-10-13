@@ -7,7 +7,11 @@ import { MessageItem } from './MessageItem';
 import { DateSeparator } from './DateSeparator';
 import { MessageComposer } from './MessageComposer';
 import { ImageViewerModal } from './ImageViewerModal';
-import type { Profile } from '../../hooks/useFriends';
+import {
+  type Profile,
+  resolveProfileDisplayName,
+  getProfileInitials,
+} from '../../hooks/useFriends';
 import { isSameDay } from 'date-fns';
 
 interface ChatPaneProps {
@@ -73,7 +77,7 @@ export function ChatPane({ conversationId, friendProfile, onBack }: ChatPaneProp
     }
   }, [messages, loading]);
 
-  const displayName = friendProfile.display_name || friendProfile.full_name || friendProfile.username;
+  const displayName = resolveProfileDisplayName(friendProfile);
   const hasStreak = typeof friendProfile.current_streak === 'number' && friendProfile.current_streak > 0;
 
   return (
@@ -98,7 +102,7 @@ export function ChatPane({ conversationId, friendProfile, onBack }: ChatPaneProp
               <img src={friendProfile.avatar_url} alt="" className="w-full h-full object-cover" />
             ) : (
               <span className="text-xs font-bold text-textMuted">
-                {displayName.substring(0, 2).toUpperCase()}
+                {getProfileInitials(friendProfile)}
               </span>
             )}
           </div>

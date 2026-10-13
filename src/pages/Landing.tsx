@@ -498,15 +498,15 @@ export function Landing() {
               </h3>
               <ul className="flex flex-col gap-4">
                 <li className="flex flex-col gap-1">
-                  <span className="text-sm font-bold">Tasks</span>
+                  <span className="text-sm font-bold">Tasks & Time Scheduling</span>
                   <span className="text-xs text-textMuted">
-                    Daily execution, recurring habits, and task skipping.
+                    Daily execution, scheduled times of day with tactile time picker, recurring habits (daily, weekly, monthly, yearly), and completion tracking.
                   </span>
                 </li>
                 <li className="flex flex-col gap-1">
-                  <span className="text-sm font-bold">Calendar</span>
+                  <span className="text-sm font-bold">Calendar & Timeline</span>
                   <span className="text-xs text-textMuted">
-                    Schedule your day with a unified timeline interface.
+                    Schedule your day with a unified timeline interface and day-by-day task planning.
                   </span>
                 </li>
               </ul>
@@ -518,10 +518,9 @@ export function Landing() {
               </h3>
               <ul className="flex flex-col gap-4">
                 <li className="flex flex-col gap-1">
-                  <span className="text-sm font-bold">Notes</span>
+                  <span className="text-sm font-bold">Notes & Knowledge Base</span>
                   <span className="text-xs text-textMuted">
-                    Markdown, folders, tags, and bidirectional links for your
-                    intellect.
+                    TipTap rich-text editing, folder hierarchies, color tags, and debounced auto-save.
                   </span>
                 </li>
               </ul>
@@ -533,15 +532,15 @@ export function Landing() {
               </h3>
               <ul className="flex flex-col gap-4">
                 <li className="flex flex-col gap-1">
-                  <span className="text-sm font-bold">Analytics</span>
+                  <span className="text-sm font-bold">Analytics & Metrics</span>
                   <span className="text-xs text-textMuted">
-                    Understand your completion rate and long-term consistency.
+                    Completion rates, radar discipline profiles, peak performance hours, and long-term consistency powered by Visx.
                   </span>
                 </li>
                 <li className="flex flex-col gap-1">
-                  <span className="text-sm font-bold">History</span>
+                  <span className="text-sm font-bold">Contribution History</span>
                   <span className="text-xs text-textMuted">
-                    View your daily contribution graph across the entire year.
+                    Full annual GitHub-style productivity heatmap visualizing every day of execution.
                   </span>
                 </li>
               </ul>
@@ -555,7 +554,19 @@ export function Landing() {
                 <li className="flex flex-col gap-1">
                   <span className="text-sm font-bold">Friends & Profiles</span>
                   <span className="text-xs text-textMuted">
-                    Connect with others and view their public progress patterns.
+                    Connect with friends, manage requests, and view public accountability profiles and heatmaps.
+                  </span>
+                </li>
+                <li className="flex flex-col gap-1">
+                  <span className="text-sm font-bold">Direct Messaging</span>
+                  <span className="text-xs text-textMuted">
+                    Real-time authenticated chat with your circle and signed-URL image sharing.
+                  </span>
+                </li>
+                <li className="flex flex-col gap-1">
+                  <span className="text-sm font-bold">Transcend Leaderboard</span>
+                  <span className="text-xs text-textMuted">
+                    Podium rankings and streak accountability to stay consistent together.
                   </span>
                 </li>
               </ul>
@@ -581,8 +592,10 @@ export function Landing() {
             </h2>
             <p className="text-sm md:text-base text-textMuted leading-relaxed">
               You don&apos;t have to improve alone. Find your friends, send
-              requests, and view their public profiles. Seeing someone
-              else&apos;s consistency is the best motivation for your own.
+              requests, and view their public profiles. Coordinate via
+              real-time direct messaging and compete on the Transcend streak
+              leaderboard. Seeing someone else&apos;s consistency is the best
+              motivation for your own.
             </p>
           </div>
 
@@ -768,6 +781,14 @@ export function Landing() {
                     className="text-textMain hover:text-textMuted transition-colors"
                   >
                     Friends
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/transcend"
+                    className="text-textMain hover:text-textMuted transition-colors"
+                  >
+                    Transcend
                   </Link>
                 </li>
               </ul>

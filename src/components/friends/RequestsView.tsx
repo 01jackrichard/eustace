@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Check, X, UserCheck, Send, Clock } from 'lucide-react';
-import { type Friendship } from '../../hooks/useFriends';
+import {
+  type Friendship,
+  resolveProfileDisplayName,
+  getProfileInitials,
+} from '../../hooks/useFriends';
 
 interface RequestsViewProps {
   incomingRequests: Friendship[];
@@ -51,8 +55,8 @@ export function RequestsView({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {incomingRequests.map((req) => {
               const profile = req.profiles;
-              const displayName = profile.display_name || profile.full_name || profile.username;
-              const initials = displayName.substring(0, 2).toUpperCase();
+              const displayName = resolveProfileDisplayName(profile);
+              const initials = getProfileInitials(profile);
 
               return (
                 <div
@@ -135,8 +139,8 @@ export function RequestsView({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {outgoingRequests.map((req) => {
               const profile = req.profiles;
-              const displayName = profile.display_name || profile.full_name || profile.username;
-              const initials = displayName.substring(0, 2).toUpperCase();
+              const displayName = resolveProfileDisplayName(profile);
+              const initials = getProfileInitials(profile);
 
               return (
                 <div

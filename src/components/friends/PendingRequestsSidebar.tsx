@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Check, X, ArrowRight } from 'lucide-react';
-import { type Friendship } from '../../hooks/useFriends';
+import {
+  type Friendship,
+  resolveProfileDisplayName,
+  getProfileInitials,
+} from '../../hooks/useFriends';
 
 interface PendingRequestsSidebarProps {
   incomingRequests: Friendship[];
@@ -44,8 +48,8 @@ export function PendingRequestsSidebar({
         <div className="flex flex-col gap-2.5">
           {visibleRequests.map((req) => {
             const profile = req.profiles;
-            const displayName = profile.display_name || profile.full_name || profile.username;
-            const initials = displayName.substring(0, 2).toUpperCase();
+            const displayName = resolveProfileDisplayName(profile);
+            const initials = getProfileInitials(profile);
 
             return (
               <div

@@ -6,6 +6,106 @@ import { Loader2, Upload, User, Check, X, Camera } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { cn } from '../lib/utils';
 
+export type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'error';
+
+export const USERNAME_TAKEN_ERROR_MESSAGE = 'Username is already taken. Please choose another.';
+export const USERNAME_VERIFY_ERROR_MESSAGE =
+  'Could not verify username availability. Please try again.';
+
+export function validateUsernameFormat(u: string): boolean {
+  if (!u) return false;
+  const regex = /^[a-z0-9_]{3,20}$/;
+  return regex.test(u);
+}
+
+export async function verifyEditProfileUsername(params: {
+  candidateUsername: string;
+  currentUsername?: string | null;
+  client?: {
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>
+    ) => PromiseLike<{ data: unknown; error: unknown }>;
+  };
+}): Promise<{ status: UsernameStatus; errorMessage: string | null }> {
+  const cleanCandidate = (params.candidateUsername || '').trim().toLowerCase();
+  const cleanCurrent = (params.currentUsername || '').trim().toLowerCase();
+
+  if (!cleanCandidate || cleanCandidate === cleanCurrent) {
+    return { status: 'idle', errorMessage: null };
+  }
+
+  if (!validateUsernameFormat(cleanCandidate)) {
+    return { status: 'invalid', errorMessage: null };
+  }
+
+  const rpcClient = params.client ?? supabase;
+
+  try {
+    const { data: rpcAvailable, error: rpcError } = await rpcClient.rpc(
+      'check_username_available',
+      {
+        target_username: cleanCandidate,
+      }
+    );
+
+    if (!rpcError && typeof rpcAvailable === 'boolean') {
+      return {
+        status: rpcAvailable ? 'available' : 'taken',
+        errorMessage: null,
+      };
+    }
+
+    return {
+      status: 'error',
+      errorMessage: USERNAME_VERIFY_ERROR_MESSAGE,
+    };
+  } catch {
+    return {
+      status: 'error',
+      errorMessage: USERNAME_VERIFY_ERROR_MESSAGE,
+    };
+  }
+}
+
+export function resolveProfileSaveError(
+  error: { code?: string | null; message?: string | null } | null | undefined
+): { isUsernameTaken: boolean; errorMessage: string } {
+  if (error?.code === '23505') {
+    return {
+      isUsernameTaken: true,
+      errorMessage: USERNAME_TAKEN_ERROR_MESSAGE,
+    };
+  }
+  return {
+    isUsernameTaken: false,
+    errorMessage: error?.message || JSON.stringify(error),
+  };
+}
+
+export function canSaveEditProfile(params: {
+  isDirty: boolean;
+  saving: boolean;
+  username: string;
+  currentUsername?: string | null;
+  usernameStatus: UsernameStatus;
+}): boolean {
+  const normalizedInput = (params.username || '').trim().toLowerCase();
+  const normalizedCurrent = (params.currentUsername || '').trim().toLowerCase();
+  if (!params.isDirty || params.saving || !normalizedInput) {
+    return false;
+  }
+  if (!validateUsernameFormat(normalizedInput)) {
+    return false;
+  }
+  const isUsernameUnchanged =
+    normalizedInput !== '' && normalizedInput === normalizedCurrent;
+  if (isUsernameUnchanged) {
+    return true;
+  }
+  return params.usernameStatus === 'available';
+}
+
 interface EditProfileModalProps {
   onClose: () => void;
 }
@@ -29,7 +129,12 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
   const [coverLoading, setCoverLoading] = useState(false);
 
   const debouncedUsername = useDebounce(username, 500);
-  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
+
+  const normalizedCurrentUsername = (profile?.username || '').trim().toLowerCase();
+  const normalizedInputUsername = username.trim().toLowerCase();
+  const isUsernameUnchanged =
+    normalizedInputUsername !== '' && normalizedInputUsername === normalizedCurrentUsername;
 
   const isDirty =
     username !== (profile?.username || '') ||
@@ -39,19 +144,32 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
     avatarUrl !== (profile?.avatar_url || '') ||
     coverUrl !== (profile?.cover_image_url || '');
 
-  const validateUsername = (u: string) => {
-    if (!u) return false;
-    const regex = /^[a-z0-9_]{3,20}$/;
-    return regex.test(u);
-  };
+  const validateUsername = validateUsernameFormat;
 
   useEffect(() => {
+    if (!username || isUsernameUnchanged) {
+      setUsernameStatus('idle');
+      setErrorMessage((prev) => (prev === USERNAME_VERIFY_ERROR_MESSAGE ? null : prev));
+      return;
+    }
+    if (!validateUsername(normalizedInputUsername)) {
+      setUsernameStatus('invalid');
+      return;
+    }
+    if (normalizedInputUsername !== debouncedUsername.trim().toLowerCase()) {
+      setUsernameStatus('checking');
+    }
+  }, [username, isUsernameUnchanged, normalizedInputUsername, debouncedUsername, validateUsername]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function checkUsername() {
       if (!debouncedUsername) {
         setUsernameStatus('idle');
         return;
       }
-      if (debouncedUsername === profile?.username) {
+      if (debouncedUsername.trim().toLowerCase() === normalizedCurrentUsername) {
         setUsernameStatus('idle');
         return;
       }
@@ -60,15 +178,24 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
         return;
       }
       setUsernameStatus('checking');
-      const { data } = await supabase.from('profiles').select('id').eq('username', debouncedUsername).single();
-      if (data && data.id !== user?.id) {
-        setUsernameStatus('taken');
+      const result = await verifyEditProfileUsername({
+        candidateUsername: debouncedUsername,
+        currentUsername: profile?.username,
+      });
+      if (cancelled) return;
+      setUsernameStatus(result.status);
+      if (result.errorMessage) {
+        setErrorMessage(result.errorMessage);
       } else {
-        setUsernameStatus('available');
+        setErrorMessage((prev) => (prev === USERNAME_VERIFY_ERROR_MESSAGE ? null : prev));
       }
     }
     checkUsername();
-  }, [debouncedUsername, profile?.username, user?.id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedUsername, normalizedCurrentUsername, profile?.username]);
 
   const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -134,7 +261,25 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
   const handleSave = async () => {
     if (!user) return;
     if (username && !validateUsername(username)) return setUsernameStatus('invalid');
-    if (usernameStatus === 'taken') return;
+    if (!isUsernameUnchanged) {
+      if (usernameStatus === 'error') {
+        setErrorMessage(USERNAME_VERIFY_ERROR_MESSAGE);
+        setSaveStatus('error');
+        return;
+      }
+      if (usernameStatus !== 'available') return;
+    }
+    if (
+      !canSaveEditProfile({
+        isDirty,
+        saving,
+        username,
+        currentUsername: profile?.username,
+        usernameStatus,
+      })
+    ) {
+      return;
+    }
     setSaving(true);
     setSaveStatus('saving');
     setErrorMessage(null);
@@ -151,7 +296,11 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
     };
     const { error } = await supabase.from('profiles').upsert(updates);
     if (error) {
-      setErrorMessage(error.message || JSON.stringify(error));
+      const resolved = resolveProfileSaveError(error);
+      if (resolved.isUsernameTaken) {
+        setUsernameStatus('taken');
+      }
+      setErrorMessage(resolved.errorMessage);
       setSaveStatus('error');
     } else {
       await refreshProfile();
@@ -263,7 +412,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
                   type="text"
                   className={cn(
                     "w-full bg-transparent border-b border-border/30 pb-2 pl-6 text-lg font-bold text-textMain focus:outline-none transition-colors",
-                    usernameStatus === 'taken' || usernameStatus === 'invalid' ? "border-red-500 focus:border-red-500" : "focus:border-accent"
+                    usernameStatus === 'taken' || usernameStatus === 'invalid' || usernameStatus === 'error' ? "border-red-500 focus:border-red-500" : "focus:border-accent"
                   )}
                   value={username}
                   onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
@@ -274,6 +423,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
                 {usernameStatus === 'available' && <span className="text-[9px] font-bold tracking-widest text-accent uppercase"><Check size={10} className="inline mr-1" /> Available</span>}
                 {usernameStatus === 'taken' && <span className="text-[9px] font-bold tracking-widest text-red-500 uppercase"><X size={10} className="inline mr-1" /> Taken</span>}
                 {usernameStatus === 'invalid' && <span className="text-[9px] font-bold tracking-widest text-red-500 uppercase"><X size={10} className="inline mr-1" /> Invalid format</span>}
+                {usernameStatus === 'error' && <span className="text-[9px] font-bold tracking-widest text-red-500 uppercase"><X size={10} className="inline mr-1" /> Could not verify availability</span>}
               </div>
             </div>
 
@@ -301,7 +451,16 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
             {isDirty && saveStatus === 'idle' ? <span className="text-yellow-500 animate-pulse">Unsaved Changes</span> : 'Up to date'}
           </div>
           <button
-            onClick={handleSave} disabled={!isDirty || saving || !username || usernameStatus === 'taken' || usernameStatus === 'invalid'}
+            onClick={handleSave}
+            disabled={
+              !canSaveEditProfile({
+                isDirty,
+                saving,
+                username,
+                currentUsername: profile?.username,
+                usernameStatus,
+              })
+            }
             className="py-2 px-6 bg-textMain text-background hover:bg-white text-[10px] font-bold tracking-widest uppercase rounded disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
           >
             {saveStatus === 'saving' ? <Loader2 size={12} className="animate-spin" /> : 'Save Changes'}

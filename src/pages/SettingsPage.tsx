@@ -141,6 +141,25 @@ export function SettingsPage() {
     if (!user) return;
     setIsDeleting(true);
     try {
+      // 1. Client-side storage pre-cleanup attempt for avatar and cover files
+      try {
+        const [avatarFiles, coverFiles] = await Promise.all([
+          supabase.storage.from('profile-images').list('', { search: user.id }),
+          supabase.storage.from('profile-covers').list('', { search: user.id })
+        ]);
+        const avatarNames = avatarFiles.data?.map(f => f.name) || [];
+        const coverNames = coverFiles.data?.map(f => f.name) || [];
+        if (avatarNames.length > 0) {
+          await supabase.storage.from('profile-images').remove(avatarNames);
+        }
+        if (coverNames.length > 0) {
+          await supabase.storage.from('profile-covers').remove(coverNames);
+        }
+      } catch (storageErr) {
+        console.warn('[STORAGE_CLEANUP] Client storage cleanup warning:', storageErr);
+      }
+
+      // 2. Authoritative server-side account deletion cascade
       const { error } = await supabase.rpc('delete_user_account');
       if (error) {
         toast.error('Failed to delete account: ' + error.message);

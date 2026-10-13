@@ -24,10 +24,11 @@ export type Task = {
   name: string;
   category?: string;
   duration?: string;
-  recurring: 'none' | 'daily' | 'weekdays' | 'weekly' | 'custom';
+  recurring: 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | 'custom';
   createdAt: string; // YYYY-MM-DD
   description?: string; // serialized JSON of TaskMetadata
   metadata?: TaskMetadata;
+  startTime?: string;
 };
 
 export const parseTaskMetadata = (task: Task): TaskMetadata => {
@@ -156,8 +157,8 @@ export const getParsedRRule = (rruleStr: string): RRule | null => {
 export function getTaskScheduledMinutes(task: Task): number | null {
   const meta = parseTaskMetadata(task);
 
-  // 1. Authoritative scheduled time field from task metadata
-  const timeCandidate = meta.startTime || (meta as any).time;
+  // 1. Authoritative scheduled time field from task or task metadata
+  const timeCandidate = task.startTime || meta.startTime || (meta as any).time;
   if (timeCandidate) {
     const parsed = parseTimeString(timeCandidate);
     if (parsed) return parsed.h * 60 + parsed.m;
@@ -231,6 +232,17 @@ export const getTasksForDate = (data: AppData, dateStr: string): Task[] => {
     if (task.recurring === 'daily') return true;
     if (task.recurring === 'weekdays') return targetDayOfWeek >= 1 && targetDayOfWeek <= 5;
     if (task.recurring === 'weekly') return getDay(createdDate) === targetDayOfWeek;
+    if (task.recurring === 'monthly') {
+      const anchorDay = createdDate.getDate();
+      const daysInTargetMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
+      return targetDate.getDate() === Math.min(anchorDay, daysInTargetMonth);
+    }
+    if (task.recurring === 'yearly') {
+      if (targetDate.getMonth() !== createdDate.getMonth()) return false;
+      const anchorDay = createdDate.getDate();
+      const daysInTargetMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate();
+      return targetDate.getDate() === Math.min(anchorDay, daysInTargetMonth);
+    }
 
     if (task.recurring === 'custom' && meta.rrule) {
       try {

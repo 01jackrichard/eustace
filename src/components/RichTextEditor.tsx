@@ -65,25 +65,25 @@ const MenuBar = ({ editor }: { editor: any }) => {
       <Button 
         icon={Bold} 
         title="Bold" 
-        onClick={() => editor.chain().focus().unsetItalic().unsetUnderline().unsetStrike().toggleBold().run()} 
+        onClick={() => editor.chain().focus().toggleBold().run()} 
         isActive={editor.isActive('bold')} 
       />
       <Button 
         icon={Italic} 
         title="Italic" 
-        onClick={() => editor.chain().focus().unsetBold().unsetUnderline().unsetStrike().toggleItalic().run()} 
+        onClick={() => editor.chain().focus().toggleItalic().run()} 
         isActive={editor.isActive('italic')} 
       />
       <Button 
         icon={UnderlineIcon} 
         title="Underline" 
-        onClick={() => editor.chain().focus().unsetBold().unsetItalic().unsetStrike().toggleUnderline().run()} 
+        onClick={() => editor.chain().focus().toggleUnderline().run()} 
         isActive={editor.isActive('underline')} 
       />
       <Button 
         icon={Strikethrough} 
         title="Strikethrough" 
-        onClick={() => editor.chain().focus().unsetBold().unsetItalic().unsetUnderline().toggleStrike().run()} 
+        onClick={() => editor.chain().focus().toggleStrike().run()} 
         isActive={editor.isActive('strike')} 
       />
 

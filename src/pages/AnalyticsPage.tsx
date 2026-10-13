@@ -242,7 +242,7 @@ export function AnalyticsPage() {
           <ProductivityTrendRadarChart
             data={data}
             loading={loading}
-            onAddTask={() => navigate('/')}
+            onAddTask={() => navigate('/tasks')}
           />
         </div>
 

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Plus, Users, ArrowRight, Check } from 'lucide-react';
 import { type SuggestedProfile } from '../../hooks/useSuggestedFriends';
+import { resolveProfileDisplayName, getProfileInitials } from '../../hooks/useFriends';
 
 interface PeopleYouMayKnowSidebarProps {
   suggestedUsers: SuggestedProfile[];
@@ -43,8 +44,8 @@ export function PeopleYouMayKnowSidebar({
       ) : (
         <div className="flex flex-col gap-2.5">
           {visibleUsers.map((user) => {
-            const displayName = user.display_name || user.full_name || user.username;
-            const initials = displayName.substring(0, 2).toUpperCase();
+            const displayName = resolveProfileDisplayName(user);
+            const initials = getProfileInitials(user);
             const isRequested = requestedUserIds.has(user.id);
 
             return (

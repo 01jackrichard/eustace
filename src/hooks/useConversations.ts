@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Profile } from './useFriends';
+import { type Profile, resolveProfileDisplayName } from './useFriends';
 
 export interface ConversationItem {
   id: string;
@@ -89,7 +89,13 @@ export function useConversations() {
 
       const profileMap = new Map<string, Profile>();
       if (profilesData) {
-        profilesData.forEach((p: Profile) => profileMap.set(p.id, p));
+        profilesData.forEach((p: Profile) =>
+          profileMap.set(p.id, {
+            ...p,
+            display_name: resolveProfileDisplayName(p),
+            full_name: p.full_name || '',
+          })
+        );
       }
 
       // Fallback for any profile not returned by RPC
@@ -104,8 +110,8 @@ export function useConversations() {
           profileMap.set(p.id, {
             id: p.id,
             username: p.username,
-            display_name: p.display_name,
-            full_name: p.full_name,
+            display_name: resolveProfileDisplayName(p),
+            full_name: p.full_name || '',
             avatar_url: p.avatar_url,
             bio: p.bio || '',
             current_streak: 0

@@ -1,12 +1,13 @@
-import { SmoothInput } from './ui/SmoothInput';
-import { useState, useEffect, useRef } from 'react';
-import { X, Check, ChevronDown, Clock, Plus } from 'lucide-react';
-import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Check, ChevronDown, Clock, Plus, Repeat } from 'lucide-react';
+import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, parseISO } from 'date-fns';
 import { getTaskIcon } from '../lib/iconRegistry';
 import type { Task, TaskMetadata } from '../lib/dataManager';
 import { parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
 import { cn } from '../lib/utils';
 import { IconPicker } from './IconPicker';
+import { WheelTimePicker } from './ui/WheelTimePicker';
 
 interface AddTaskModalProps {
   date: string; // YYYY-MM-DD
@@ -17,34 +18,133 @@ interface AddTaskModalProps {
   onEdit?: (task: Task, updateType?: 'single' | 'future' | 'all') => void;
 }
 
-// Generate 15-minute intervals for time picker
-const generateTimeOptions = () => {
-  const options = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 15) {
-      const hh = h.toString().padStart(2, '0');
-      const mm = m.toString().padStart(2, '0');
-      const val = `${hh}:${mm}`;
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const hr12 = h % 12 || 12;
-      const label = `${hr12.toString().padStart(2, '0')}:${mm} ${ampm}`;
-      options.push({ val, label });
+function formatTime12(time24: string): string {
+  if (!time24 || !time24.includes(':')) return time24;
+  const [hStr, mStr] = time24.split(':');
+  const h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  return `${hour12}:${m} ${period}`;
+}
+
+export const RECURRENCE_OPTIONS: Array<{ value: Task['recurring']; label: string }> = [
+  { value: 'none', label: 'Off' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+];
+
+export function getRecurrenceDescription(recurring: Task['recurring'], dateStr: string): string {
+  if (recurring === 'none') return 'Occurs once on scheduled date';
+  if (recurring === 'daily') return 'Repeats every day';
+  try {
+    const d = parseISO(dateStr);
+    if (recurring === 'weekly') {
+      return `Repeats weekly on ${format(d, 'EEEE')}`;
     }
+    if (recurring === 'monthly') {
+      const dayNum = d.getDate();
+      return `Repeats on day ${dayNum} of every month (adjusted for shorter months)`;
+    }
+    if (recurring === 'yearly') {
+      const isLeapDay = d.getMonth() === 1 && d.getDate() === 29;
+      return `Repeats annually on ${format(d, 'MMMM d')}${isLeapDay ? ' (Feb 28 in non-leap years)' : ''}`;
+    }
+    if (recurring === 'weekdays') return 'Repeats every weekday (Mon–Fri)';
+    if (recurring === 'custom') return 'Custom recurrence rule';
+  } catch {
+    // fallback
   }
-  return options;
-};
+  return `Repeats ${recurring}`;
+}
 
-const TIME_OPTIONS = generateTimeOptions();
+interface DatePickerPopoverProps {
+  selectedDate: Date;
+  onSelect: (date: Date) => void;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLElement | null>;
+}
 
-// Interactive Date Picker Popover Component
+// Anchored, non-overflowing Portal Date Picker Popover Component
 function DatePickerPopover({ 
   selectedDate, 
-  onSelect
-}: { 
-  selectedDate: Date, 
-  onSelect: (date: Date) => void
-}) {
+  onSelect,
+  onClose,
+  anchorRef
+}: DatePickerPopoverProps) {
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(selectedDate));
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; placement: 'top' | 'bottom' } | null>(null);
+
+  const updatePosition = useCallback(() => {
+    if (!anchorRef.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    const popoverWidth = 280;
+    const popoverHeight = 310;
+    const padding = 12;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let placement: 'top' | 'bottom' = 'bottom';
+    let top = rect.bottom + 6;
+
+    if (spaceBelow < popoverHeight + padding && spaceAbove > spaceBelow) {
+      placement = 'top';
+      top = Math.max(padding, rect.top - popoverHeight - 6);
+    }
+
+    // Align right edge of popover with right edge of trigger button
+    let left = rect.right - popoverWidth;
+
+    // Clamp within viewport boundaries
+    if (left + popoverWidth > window.innerWidth - padding) {
+      left = window.innerWidth - popoverWidth - padding;
+    }
+    if (left < padding) {
+      left = padding;
+    }
+
+    setCoords({ top, left, placement });
+  }, [anchorRef]);
+
+  useEffect(() => {
+    updatePosition();
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(target) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(target)
+      ) {
+        onClose();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [updatePosition, onClose, anchorRef]);
   
   const handlePrev = () => setCurrentMonth(subDays(currentMonth, 1));
   const handleNext = () => setCurrentMonth(addDays(endOfMonth(currentMonth), 1));
@@ -54,19 +154,46 @@ function DatePickerPopover({
     end: endOfMonth(currentMonth) 
   });
   
-  // Pad the beginning so the first day of the month aligns correctly (0 = Sunday, 1 = Monday)
-  // Assuming week starts on Sunday for this picker:
   const firstDayOfWeek = currentMonth.getDay();
   const paddingDays = Array.from({ length: firstDayOfWeek }).map((_, i) => i);
 
-  return (
-    <div className="absolute top-full left-0 mt-2 z-50 bg-surface border border-border/60 rounded-xl shadow-xl p-4 w-72 animate-in fade-in slide-in-from-top-2 duration-200">
-      {/* Click outside to close (handled by a generic wrapper in main component) */}
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      ref={popoverRef}
+      role="dialog"
+      aria-label="Select end date"
+      style={{
+        position: 'fixed',
+        top: coords ? `${coords.top}px` : undefined,
+        left: coords ? `${coords.left}px` : undefined,
+        zIndex: 150,
+      }}
+      className={cn(
+        "w-[280px] max-w-[calc(100vw-24px)] bg-[#0d0d0d] border border-border/70 rounded-2xl shadow-2xl p-4 select-none animate-in fade-in duration-150",
+        coords?.placement === 'top' ? "slide-in-from-bottom-2" : "slide-in-from-top-2"
+      )}
+    >
       <div className="flex items-center justify-between mb-4">
-        <h4 className="font-bold text-textMain tracking-wide">{format(currentMonth, 'MMMM yyyy')}</h4>
+        <h4 className="font-bold text-textMain tracking-wide text-xs">{format(currentMonth, 'MMMM yyyy')}</h4>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={(e) => { e.stopPropagation(); handlePrev(); }} className="p-1 hover:bg-white/5 rounded"><ChevronDown size={16} className="rotate-90" /></button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); handleNext(); }} className="p-1 hover:bg-white/5 rounded"><ChevronDown size={16} className="-rotate-90" /></button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handlePrev(); }}
+            className="p-1 hover:bg-white/5 rounded text-textMuted hover:text-textMain transition-colors"
+            aria-label="Previous month"
+          >
+            <ChevronDown size={14} className="rotate-90" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleNext(); }}
+            className="p-1 hover:bg-white/5 rounded text-textMuted hover:text-textMain transition-colors"
+            aria-label="Next month"
+          >
+            <ChevronDown size={14} className="-rotate-90" />
+          </button>
         </div>
       </div>
       <div className="grid grid-cols-7 mb-2 text-center text-[10px] font-bold text-textMuted">
@@ -83,8 +210,12 @@ function DatePickerPopover({
               type="button"
               onClick={(e) => { e.stopPropagation(); onSelect(day); }}
               className={cn(
-                "aspect-square rounded-full flex items-center justify-center text-sm font-medium transition-colors",
-                isSelected ? "bg-accent text-background font-bold" : isT ? "text-accent border border-accent/30" : "text-textMain hover:bg-white/5"
+                "aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-colors",
+                isSelected
+                  ? "bg-accent text-background font-black"
+                  : isT
+                    ? "text-accent border border-accent/40"
+                    : "text-textMain hover:bg-white/5"
               )}
             >
               {format(day, 'd')}
@@ -92,7 +223,8 @@ function DatePickerPopover({
           );
         })}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -102,7 +234,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
   const [name, setName] = useState(initialTask?.name || '');
   const [category, setCategory] = useState(initialTask?.category || '');
   
-  // Custom Icon & Color
+  // Custom Icon
   const [icon, setIcon] = useState<string | null>(meta.icon || null);
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   
@@ -110,20 +242,21 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
   const [taskDateStr] = useState(meta.startDate || date); // YYYY-MM-DD
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   
-  const [hasTime, setHasTime] = useState<boolean>(!!meta.startTime || !!initialStartTime);
-  const [startTime, setStartTime] = useState(meta.startTime || initialStartTime || '09:00');
-  const [endTime, setEndTime] = useState(meta.endTime || '');
+  // Time states: starts as Anytime by default unless initialTask has a time or initialStartTime is provided
+  const initialTimeCandidate = meta.startTime || initialTask?.startTime || initialStartTime || null;
+  const [timeMode, setTimeMode] = useState<'anytime' | 'set'>(initialTimeCandidate ? 'set' : 'anytime');
+  const [startTime, setStartTime] = useState<string>(initialTimeCandidate || '09:00');
+  const [isPickerExpanded, setIsPickerExpanded] = useState<boolean>(!initialTask && Boolean(initialStartTime));
 
-  const [recurring, setRecurring] = useState<'none' | 'daily'>(
-    initialTask?.recurring === 'daily' ? 'daily' : 'none'
-  );
-  const [notes, setNotes] = useState(meta.notes || '');
+  // Recurrence state: ONCE ('none') vs DAILY ('daily')
+  // Preserve existing recurring value for legacy tasks (e.g. 'weekly', 'monthly', 'yearly', 'custom')
+  const [recurring, setRecurring] = useState<Task['recurring']>(initialTask?.recurring || 'none');
   
+  const [notes, setNotes] = useState(meta.notes || '');
   const [endDate, setEndDate] = useState(meta.endDate || '');
-  const [showEndDateError, setShowEndDateError] = useState(false);
-  const [timeError, setTimeError] = useState('');
 
   const modalRef = useRef<HTMLDivElement>(null);
+  const endDateTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -133,53 +266,24 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose, isIconPickerOpen]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (isDatePickerOpen && !(e.target as Element).closest('.date-picker-container')) {
-        setIsDatePickerOpen(false);
-      }
-    };
-    window.addEventListener('mousedown', handleClickOutside);
-    return () => window.removeEventListener('mousedown', handleClickOutside);
-  }, [isDatePickerOpen]);
-
-  // Clear errors when fields change
-  useEffect(() => {
-    if (endDate) setShowEndDateError(false);
-  }, [endDate]);
-
-  useEffect(() => {
-    if (hasTime && startTime && endTime) {
-      if (endTime < startTime) {
-        setTimeError('End time must be after start time.');
-      } else {
-        setTimeError('');
-      }
-    } else {
-      setTimeError('');
-    }
-  }, [startTime, endTime, hasTime]);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    if (recurring === 'daily' && !endDate) {
-      setShowEndDateError(true);
-      return;
-    }
-
-    if (timeError) return;
+    const chosenStartTime = timeMode === 'set' && startTime ? startTime : undefined;
 
     const metadata: TaskMetadata = {
       ...meta,
       notes: notes.trim() || undefined,
       startDate: taskDateStr,
-      endDate: recurring === 'daily' ? endDate : undefined,
-      startTime: hasTime && startTime ? startTime : undefined,
-      endTime: hasTime && endTime ? endTime : undefined,
+      endDate: recurring !== 'none' && endDate ? endDate : undefined,
+      startTime: chosenStartTime,
       icon: icon || undefined
     };
+
+    if (!chosenStartTime) {
+      delete metadata.startTime;
+    }
 
     if ('priority' in metadata) delete metadata.priority;
 
@@ -190,16 +294,18 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
         category: category.trim() || undefined,
         recurring: recurring,
         description: serializeTaskMetadata(metadata),
-        metadata
-      }, recurring === 'daily' ? 'future' : 'single');
+        metadata,
+        startTime: chosenStartTime
+      }, recurring !== 'none' ? 'future' : 'single');
     } else {
       onAdd({
         name: name.trim(),
         category: category.trim() || undefined,
         recurring: recurring,
-        createdAt: taskDateStr, // use the explicitly chosen date
+        createdAt: taskDateStr,
         description: serializeTaskMetadata(metadata),
-        metadata
+        metadata,
+        startTime: chosenStartTime
       });
     }
   };
@@ -208,173 +314,233 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-background/80 md:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-background/85 md:p-4 backdrop-blur-md animate-in fade-in duration-200">
         <div
           ref={modalRef}
-          className="w-full max-w-xl bg-surface border-t border-x md:border border-border/40 rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] max-h-[90dvh] flex flex-col"
+          className="w-full max-w-xl bg-surface border-t border-x md:border border-border/50 rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] max-h-[92dvh] flex flex-col"
         >
-          <div className="px-6 py-5 border-b border-border/20 flex items-center justify-between shrink-0">
-            <h2 className="text-[11px] font-bold tracking-[0.2em] text-textMuted uppercase">
+          {/* Header */}
+          <div className="px-6 py-5 border-b border-border/20 flex items-center justify-between shrink-0 bg-surface">
+            <h2 className="text-[11px] font-black tracking-[0.25em] text-textMuted uppercase flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
               {initialTask ? 'Edit Task' : 'New Task'}
             </h2>
-            <button onClick={onClose} className="text-textMuted hover:text-textMain transition-colors p-1 bg-white/5 hover:bg-white/10 rounded-full">
-              <X size={16} />
+            <button
+              onClick={onClose}
+              className="text-textMuted hover:text-textMain transition-colors p-1.5 bg-white/5 hover:bg-white/10 rounded-full"
+              title="Close (Esc)"
+            >
+              <X size={15} />
             </button>
           </div>
 
-          <form id="task-form" onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-6">
+          <form id="task-form" onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-7">
             
-            {/* Title and Icon */}
+            {/* Title, Category & Icon */}
             <div className="flex gap-4 items-start">
               <button
                 type="button"
                 onClick={() => setIsIconPickerOpen(true)}
-                className="w-12 h-12 shrink-0 rounded-xl border border-border/60 bg-background/50 hover:bg-white/5 hover:border-textMuted transition-all flex items-center justify-center group text-textMuted"
+                className="w-12 h-12 shrink-0 rounded-2xl border border-border/60 bg-[#0d0d0d] hover:bg-white/5 hover:border-textMuted/60 transition-all flex items-center justify-center group text-textMuted hover:text-textMain shadow-inner mt-0.5"
                 title="Choose Icon"
               >
                 {SelectedIcon ? <SelectedIcon size={22} className="text-textMain group-hover:scale-110 transition-transform" /> : <Plus size={20} />}
               </button>
-              <div className="flex-1 min-w-0">
-                <SmoothInput
+              <div className="flex-1 min-w-0 flex flex-col gap-1">
+                <input
                   type="text"
                   placeholder="Task title"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-transparent text-xl md:text-2xl font-bold text-textMain placeholder:text-textMuted/40 focus:outline-none mb-2"
+                  className="w-full bg-transparent border-none outline-none focus:outline-none text-2xl md:text-3xl font-bold tracking-tight text-textMain placeholder:text-textMuted/30 caret-accent selection:bg-accent/30 py-1 leading-normal"
                   autoFocus
                 />
-                <SmoothInput
+                <input
                   type="text"
                   placeholder="Optional category"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-transparent text-sm font-medium text-textMuted placeholder:text-textMuted/40 focus:outline-none"
+                  className="w-full bg-transparent border-none outline-none focus:outline-none text-sm font-medium text-textMuted placeholder:text-textMuted/30 caret-accent selection:bg-accent/30 py-0.5"
                 />
               </div>
             </div>
 
             <div className="h-px bg-border/20" />
 
-            {/* TIME ROW */}
-            <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-              {/* TIME */}
-              <div className="space-y-3 flex-1 min-w-0">
-                <label className="flex items-center justify-between w-full">
-                  <span className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase flex items-center gap-2">
-                    <Clock size={12} /> Time
-                  </span>
+            {/* TIME SECTION */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase flex items-center gap-2">
+                  <Clock size={12} /> Time
+                </span>
+                {timeMode === 'set' && (
                   <button
                     type="button"
-                    onClick={() => setHasTime(!hasTime)}
-                    className={cn(
-                      "text-[10px] font-bold tracking-[0.1em] uppercase px-2 py-0.5 rounded transition-colors",
-                      hasTime ? "bg-accent/20 text-accent" : "bg-surface border border-border/60 text-textMuted"
-                    )}
+                    onClick={() => {
+                      setTimeMode('anytime');
+                      setIsPickerExpanded(false);
+                    }}
+                    className="text-[10px] font-bold tracking-[0.1em] uppercase px-2.5 py-1 rounded-md text-textMuted hover:text-red-400 hover:bg-red-500/10 transition-colors"
                   >
-                    {hasTime ? 'Enabled' : 'Disabled'}
+                    Clear (Anytime)
                   </button>
-                </label>
-                
-                {hasTime ? (
-                  <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <div className="relative flex-1">
-                      <select
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        className="w-full appearance-none bg-background border border-border/60 text-textMain text-sm font-medium rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-textMuted transition-colors"
-                      >
-                        {TIME_OPTIONS.map(opt => <option key={`start-${opt.val}`} value={opt.val}>{opt.label}</option>)}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted pointer-events-none" />
-                    </div>
-                    <span className="text-textMuted text-xs font-bold uppercase">to</span>
-                    <div className="relative flex-1">
-                      <select
-                        value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
-                        className="w-full appearance-none bg-background border border-border/60 text-textMain text-sm font-medium rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-textMuted transition-colors"
-                      >
-                        <option value="">None</option>
-                        {TIME_OPTIONS.map(opt => <option key={`end-${opt.val}`} value={opt.val}>{opt.label}</option>)}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted pointer-events-none" />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-[38px] flex items-center text-sm font-bold tracking-widest text-textMuted/40 uppercase">
-                    Anytime
-                  </div>
-                )}
-                {timeError && (
-                  <p className="text-xs text-red-400 font-medium animate-in fade-in">{timeError}</p>
                 )}
               </div>
+
+              {/* Segmented Control: Anytime | Set Time */}
+              <div className="grid grid-cols-2 p-1 bg-[#090909] border border-border/50 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimeMode('anytime');
+                    setIsPickerExpanded(false);
+                  }}
+                  className={cn(
+                    "py-2 text-xs font-bold tracking-wider rounded-lg transition-all duration-150 text-center select-none",
+                    timeMode === 'anytime'
+                      ? "bg-textMain text-background shadow-md font-black"
+                      : "text-textMuted hover:text-textMain hover:bg-white/[0.04]"
+                  )}
+                >
+                  Anytime
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimeMode('set');
+                    setIsPickerExpanded(true);
+                  }}
+                  className={cn(
+                    "py-2 text-xs font-bold tracking-wider rounded-lg transition-all duration-150 text-center select-none flex items-center justify-center gap-1.5",
+                    timeMode === 'set'
+                      ? "bg-textMain text-background shadow-md font-black"
+                      : "text-textMuted hover:text-textMain hover:bg-white/[0.04]"
+                  )}
+                >
+                  <Clock size={13} className={timeMode === 'set' ? "text-background" : "text-textMuted"} />
+                  Set Time
+                </button>
+              </div>
+
+              {/* Time Configuration Panel when 'Set Time' is active */}
+              {timeMode === 'set' && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  {/* Prominent Scheduled Time Card */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#0a0a0a] border border-border/60">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
+                        <Clock size={15} />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-textMuted">Scheduled Time</span>
+                        <span className="text-base font-bold text-textMain font-mono tracking-tight">
+                          {formatTime12(startTime)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsPickerExpanded(!isPickerExpanded)}
+                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 text-textMain border border-border/40 transition-colors"
+                      >
+                        {isPickerExpanded ? 'Done' : 'Change'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Wheel Picker (revealed when expanded) */}
+                  {isPickerExpanded && (
+                    <div className="pt-1 animate-in fade-in zoom-in-95 duration-150">
+                      <WheelTimePicker
+                        value={startTime}
+                        onChange={(newTime24) => setStartTime(newTime24)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="h-px bg-border/20" />
 
-            {/* RECURRENCE */}
+            {/* RECURRENCE SECTION */}
             <div className="space-y-3">
-              <label className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase">Recurrence</label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRecurring('none')}
-                  className={cn(
-                    "flex-1 py-2 rounded-lg text-xs font-bold tracking-widest transition-colors border",
-                    recurring === 'none'
-                      ? "bg-textMain text-background border-textMain"
-                      : "bg-surface border-border/60 text-textMuted hover:border-textMuted/40"
-                  )}
-                >
-                  ONCE
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecurring('daily')}
-                  className={cn(
-                    "flex-1 py-2 rounded-lg text-xs font-bold tracking-widest transition-colors border",
-                    recurring === 'daily'
-                      ? "bg-textMain text-background border-textMain"
-                      : "bg-surface border-border/60 text-textMuted hover:border-textMuted/40"
-                  )}
-                >
-                  DAILY
-                </button>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase flex items-center gap-2">
+                  <Repeat size={12} /> Recurrence
+                </label>
               </div>
 
-              {recurring === 'daily' && (
-                <div className="flex flex-col gap-2 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[11px] font-bold tracking-widest text-textMuted uppercase w-20">Ends</span>
+              {/* Segmented Repeat Selector: Off | Daily | Weekly | Monthly | Yearly */}
+              <div className="grid grid-cols-5 p-1 bg-[#090909] border border-border/50 rounded-xl gap-1">
+                {RECURRENCE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setRecurring(opt.value)}
+                    className={cn(
+                      "py-2 text-[11px] sm:text-xs font-bold tracking-wider rounded-lg transition-all duration-150 text-center select-none",
+                      recurring === opt.value
+                        ? "bg-textMain text-background shadow-md font-black"
+                        : "text-textMuted hover:text-textMain hover:bg-white/[0.04]"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Recurrence Description / Cadence Rule */}
+              <p className="text-[11px] text-textMuted/80 pl-1">
+                {getRecurrenceDescription(recurring, taskDateStr)}
+              </p>
+
+              {/* If editing a legacy task with weekdays or custom not in the 5 options, preserve it cleanly */}
+              {recurring !== 'none' && !RECURRENCE_OPTIONS.some(o => o.value === recurring) && (
+                <div className="px-1 text-[11px] text-textMuted italic flex items-center justify-between">
+                  <span>Preserving existing recurrence: <strong className="capitalize text-textMain not-italic font-bold">{recurring}</strong></span>
+                </div>
+              )}
+
+              {/* Optional End Date Selector for Repeating Tasks */}
+              {recurring !== 'none' && (
+                <div className="flex items-center justify-between pt-2 border-t border-border/10 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <span className="text-[10px] font-bold tracking-widest text-textMuted uppercase">End Date</span>
+                  <div className="relative flex items-center">
+                    <button
+                      ref={endDateTriggerRef}
+                      type="button"
+                      onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
+                      className="flex items-center gap-2 bg-[#0d0d0d] border border-border/60 hover:border-textMuted text-xs font-medium rounded-lg px-3 py-1.5 transition-colors text-textMain"
+                      aria-haspopup="dialog"
+                      aria-expanded={isDatePickerOpen}
+                    >
+                      <span>
+                        {endDate ? format(new Date(endDate + 'T12:00:00'), 'MMM d, yyyy') : "No end date (ongoing)"}
+                      </span>
+                      <ChevronDown size={13} className="text-textMuted" />
+                    </button>
                     
-                    <div className="relative flex-1 date-picker-container">
+                    {endDate && (
                       <button
                         type="button"
-                        onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                        className={cn(
-                          "w-full flex items-center justify-between bg-background border text-sm font-medium tracking-wide rounded-lg px-3 py-2 transition-colors",
-                          showEndDateError ? "border-red-500/50" : "border-border/60 hover:border-textMuted"
-                        )}
+                        onClick={() => setEndDate('')}
+                        className="ml-2 text-[10px] text-textMuted hover:text-red-400 transition-colors underline"
                       >
-                        <span className={endDate ? "text-textMain" : "text-textMuted"}>
-                          {endDate ? format(new Date(endDate + 'T12:00:00'), 'MMM d, yyyy') : "Select end date"}
-                        </span>
-                        <ChevronDown size={14} className="text-textMuted" />
+                        clear
                       </button>
-                      
-                      {isDatePickerOpen && (
-                        <DatePickerPopover 
-                          selectedDate={endDate ? new Date(endDate + 'T12:00:00') : new Date(taskDateStr + 'T12:00:00')}
-                          onSelect={(d) => { setEndDate(format(d, 'yyyy-MM-dd')); setIsDatePickerOpen(false); }}
-                          
-                        />
-                      )}
-                    </div>
+                    )}
+
+                    {isDatePickerOpen && (
+                      <DatePickerPopover 
+                        selectedDate={endDate ? new Date(endDate + 'T12:00:00') : new Date(taskDateStr + 'T12:00:00')}
+                        onSelect={(d) => { setEndDate(format(d, 'yyyy-MM-dd')); setIsDatePickerOpen(false); }}
+                        onClose={() => setIsDatePickerOpen(false)}
+                        anchorRef={endDateTriggerRef}
+                      />
+                    )}
                   </div>
-                  {showEndDateError && (
-                    <p className="text-xs text-red-400 font-medium pl-24 animate-in fade-in">Please select an end date.</p>
-                  )}
                 </div>
               )}
             </div>
@@ -389,17 +555,18 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                className="w-full bg-background border border-border/60 rounded-lg p-3 text-sm font-medium text-textMain placeholder:text-textMuted/40 focus:outline-none focus:border-textMuted transition-colors resize-none"
+                className="w-full bg-[#0a0a0a] border border-border/60 rounded-xl p-3 text-sm font-medium text-textMain placeholder:text-textMuted/30 focus:outline-none focus:border-textMuted/60 transition-colors resize-none"
               />
             </div>
           </form>
 
+          {/* Footer Action */}
           <div className="p-6 border-t border-border/20 shrink-0 bg-surface">
             <button
               type="submit"
               form="task-form"
-              disabled={!name.trim() || !!timeError}
-              className="w-full bg-accent text-background font-black text-xs uppercase tracking-[0.15em] py-3.5 rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-2"
+              disabled={!name.trim()}
+              className="w-full bg-accent text-background font-black text-xs uppercase tracking-[0.2em] py-4 rounded-xl hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent/10"
             >
               <Check size={16} strokeWidth={3} />
               {initialTask ? 'Save Changes' : 'Create Task'}

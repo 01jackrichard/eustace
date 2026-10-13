@@ -3,7 +3,11 @@ import { Search, MessageSquare, Flame, ImageIcon, UserPlus } from 'lucide-react'
 import { formatDistanceToNow, isToday, format } from 'date-fns';
 import { cn } from '../../lib/utils';
 import type { ConversationItem } from '../../hooks/useConversations';
-import type { Profile } from '../../hooks/useFriends';
+import {
+  type Profile,
+  resolveProfileDisplayName,
+  getProfileInitials,
+} from '../../hooks/useFriends';
 
 interface ConversationListProps {
   conversations: ConversationItem[];
@@ -28,9 +32,10 @@ export function ConversationList({
   const filteredConversations = conversations.filter((c) => {
     const q = search.toLowerCase().trim();
     if (!q) return true;
-    const name = (c.friend.display_name || c.friend.full_name || '').toLowerCase();
+    const name = resolveProfileDisplayName(c.friend, '').toLowerCase();
+    const fullName = (c.friend.full_name || '').toLowerCase();
     const uname = (c.friend.username || '').toLowerCase();
-    return name.includes(q) || uname.includes(q);
+    return name.includes(q) || fullName.includes(q) || uname.includes(q);
   });
 
   const formatActivityTime = (dateStr: string) => {
@@ -113,7 +118,7 @@ export function ConversationList({
         ) : (
           filteredConversations.map((conv) => {
             const isSelected = conv.id === selectedConversationId;
-            const displayName = conv.friend.display_name || conv.friend.full_name || conv.friend.username;
+            const displayName = resolveProfileDisplayName(conv.friend);
             const hasStreak = typeof conv.friend.current_streak === 'number' && conv.friend.current_streak > 0;
 
             return (
@@ -134,7 +139,7 @@ export function ConversationList({
                       <img src={conv.friend.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-xs font-bold text-textMuted">
-                        {displayName.substring(0, 2).toUpperCase()}
+                        {getProfileInitials(conv.friend)}
                       </span>
                     )}
                   </div>
@@ -228,13 +233,13 @@ export function ConversationList({
                         <img src={f.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-xs font-bold text-textMuted">
-                          {(f.profiles.display_name || f.profiles.username)?.substring(0, 2).toUpperCase()}
+                          {getProfileInitials(f.profiles)}
                         </span>
                       )}
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className="text-xs font-bold text-textMain truncate">
-                        {f.profiles.display_name || f.profiles.full_name || f.profiles.username}
+                        {resolveProfileDisplayName(f.profiles)}
                       </span>
                       <span className="text-[10px] text-textMuted truncate">@{f.profiles.username}</span>
                     </div>

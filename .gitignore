@@ -1,4 +1,4 @@
-﻿# Logs
+# Logs
 logs
 *.log
 npm-debug.log*
@@ -28,3 +28,5 @@ dist-ssr
 *.sw?
 
 archive/
+# Supabase CLI temporary directory
+supabase/.temp/

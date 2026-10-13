@@ -12,6 +12,8 @@ export type Profile = {
   avatar_url: string | null;
   cover_image_url: string | null;
   visibility: 'private' | 'friends' | 'public';
+  activity_visibility?: 'private' | 'friends' | 'public';
+  timezone?: string | null;
   current_streak?: number;
 };
 
@@ -79,12 +81,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           if (completions && completions.length > 0) {
             currentStreak = calculateStreakFromDates(completions.map(c => c.completed_date));
-            
+          }
+        }
+
+        // Reliably ensure user IANA timezone initialization
+        let userTimezone = profileRes.data.timezone;
+        if (!userTimezone || userTimezone.trim() === '') {
+          try {
+            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            await supabase.from('profiles').update({ timezone: detectedTz }).eq('id', userId);
+            userTimezone = detectedTz;
+          } catch (tzErr) {
+            console.warn('[AUTH] Timezone auto-initialization error:', tzErr);
           }
         }
 
         setProfile({
           ...profileRes.data,
+          timezone: userTimezone,
           current_streak: currentStreak
         } as Profile);
       }

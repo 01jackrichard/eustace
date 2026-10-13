@@ -11,7 +11,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@number-flow/react": "^0.6.2",
     "@supabase/supabase-js": "^2.117.2",
     "@tiptap/extension-placeholder": "^3.31.4",
     "@tiptap/extension-text-align": "^3.31.4",
@@ -32,7 +31,6 @@
     "d3-array": "^3.2.4",
     "d3-shape": "^3.2.0",
     "date-fns": "^4.4.0",
-    "dialkit": "^2.0.2",
     "lucide-react": "^1.50.0",
     "motion": "^14.0.0",
     "react": "^19.2.8",

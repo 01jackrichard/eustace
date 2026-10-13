@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageSquare, MoreHorizontal, User, Copy, UserMinus, Flame, Check } from 'lucide-react';
-import { type Friendship, type Profile } from '../../hooks/useFriends';
+import {
+  type Friendship,
+  type Profile,
+  resolveProfileDisplayName,
+  getProfileInitials,
+} from '../../hooks/useFriends';
 import { cn } from '../../lib/utils';
 import toast from 'react-hot-toast';
 
@@ -21,9 +26,9 @@ export function FriendCard({
   onRemoveFriend,
 }: FriendCardProps) {
   const profile = friendship.profiles;
-  const displayName = profile.display_name || profile.full_name || profile.username || 'Friend';
+  const displayName = resolveProfileDisplayName(profile);
   const username = profile.username || 'user';
-  const initials = (profile.display_name || profile.username || 'F').substring(0, 2).toUpperCase();
+  const initials = getProfileInitials(profile);
   const cleanBio = profile.bio?.trim();
   const hasBio = Boolean(cleanBio && cleanBio.length > 0);
 

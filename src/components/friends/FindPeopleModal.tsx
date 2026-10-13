@@ -3,7 +3,12 @@ import { Link } from 'react-router-dom';
 import { Search, X, UserPlus, Users, MessageSquare, Check, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useDebounce } from '../../hooks/useDebounce';
-import { type Profile, type Friendship } from '../../hooks/useFriends';
+import {
+  type Profile,
+  type Friendship,
+  resolveProfileDisplayName,
+  getProfileInitials,
+} from '../../hooks/useFriends';
 import { type SuggestedProfile } from '../../hooks/useSuggestedFriends';
 
 interface FindPeopleModalProps {
@@ -186,8 +191,8 @@ export function FindPeopleModal({
             </div>
           ) : (
             displayList.map((person) => {
-              const displayName = person.display_name || person.full_name || person.username;
-              const initials = displayName.substring(0, 2).toUpperCase();
+              const displayName = resolveProfileDisplayName(person);
+              const initials = getProfileInitials(person);
               let status = getFriendshipStatus(person.id);
               if (optimisticSentIds.has(person.id)) {
                 status = 'sent';

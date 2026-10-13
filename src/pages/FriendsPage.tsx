@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { useFriends, type Profile } from '../hooks/useFriends';
+import { useFriends, type Profile, resolveProfileDisplayName } from '../hooks/useFriends';
 import { useConversations } from '../hooks/useConversations';
 import { usePresence } from '../hooks/usePresence';
 import { useSuggestedFriends } from '../hooks/useSuggestedFriends';
@@ -201,10 +201,11 @@ export function FriendsPage() {
     if (friendsSearchQuery.trim()) {
       const q = friendsSearchQuery.trim().toLowerCase();
       list = list.filter((f) => {
-        const name = (f.profiles.display_name || f.profiles.full_name || '').toLowerCase();
+        const name = resolveProfileDisplayName(f.profiles, '').toLowerCase();
+        const fullName = (f.profiles.full_name || '').toLowerCase();
         const username = (f.profiles.username || '').toLowerCase();
         const bio = (f.profiles.bio || '').toLowerCase();
-        return name.includes(q) || username.includes(q) || bio.includes(q);
+        return name.includes(q) || fullName.includes(q) || username.includes(q) || bio.includes(q);
       });
     }
 
@@ -223,8 +224,8 @@ export function FriendsPage() {
         return streakB - streakA;
       }
       if (sortBy === 'username') {
-        const nameA = a.profiles.display_name || a.profiles.username || '';
-        const nameB = b.profiles.display_name || b.profiles.username || '';
+        const nameA = resolveProfileDisplayName(a.profiles, a.profiles.username || '');
+        const nameB = resolveProfileDisplayName(b.profiles, b.profiles.username || '');
         return nameA.localeCompare(nameB);
       }
       // 'recent': prioritize online users first, then by friendship created_at descending

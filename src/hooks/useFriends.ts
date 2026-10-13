@@ -30,14 +30,66 @@ export type DetailedError = {
   query?: string;
 };
 
+export function formatUsernameAsDisplayName(username?: string | null): string {
+  if (!username || typeof username !== 'string') return '';
+  const cleaned = username.trim().replace(/^@+/, '');
+  if (!cleaned || cleaned.toLowerCase() === 'user') return '';
+
+  return cleaned
+    .split(/[\s_.-]+/)
+    .filter(Boolean)
+    .map((segment) =>
+      /[a-zA-Z]/.test(segment)
+        ? segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase()
+        : segment
+    )
+    .join(' ');
+}
+
+export function resolveProfileDisplayName(
+  profile?: {
+    display_name?: string | null;
+    full_name?: string | null;
+    username?: string | null;
+  } | null,
+  fallback = 'Friend'
+): string {
+  const rawDisplay = typeof profile?.display_name === 'string' ? profile.display_name.trim() : '';
+  if (rawDisplay && rawDisplay.toLowerCase() !== 'friend') {
+    return rawDisplay;
+  }
+
+  const rawFull = typeof profile?.full_name === 'string' ? profile.full_name.trim() : '';
+  if (rawFull && rawFull.toLowerCase() !== 'friend') {
+    return rawFull;
+  }
+
+  const fromUsername = formatUsernameAsDisplayName(profile?.username);
+  if (fromUsername) {
+    return fromUsername;
+  }
+
+  return fallback;
+}
+
+export function getProfileInitials(
+  profile?: {
+    display_name?: string | null;
+    full_name?: string | null;
+    username?: string | null;
+  } | null
+): string {
+  const resolved = resolveProfileDisplayName(profile, '');
+  const source = resolved || (profile?.username || '').replace(/^@+/, '').trim() || 'FR';
+  return source.substring(0, 2).toUpperCase();
+}
+
 export function useFriends() {
   const { user, profile } = useAuth();
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<DetailedError | null>(null);
   const [myStreak, setMyStreak] = useState<number | null>(null);
-
-  
 
   const fetchFriendships = useCallback(async () => {
     if (!user) return;
@@ -107,11 +159,19 @@ export function useFriends() {
             streak = 0;
           }
 
+          const rawUsername = (direct?.username || rpc?.username || 'user').trim();
+          const rawDisplayName = (direct?.display_name || rpc?.display_name || '').trim();
+          const rawFullName = (direct?.full_name || rpc?.full_name || '').trim();
+
           return {
             id,
-            username: direct?.username || rpc?.username || 'user',
-            display_name: direct?.display_name || rpc?.display_name || 'Friend',
-            full_name: direct?.full_name || rpc?.full_name || '',
+            username: rawUsername,
+            display_name: resolveProfileDisplayName({
+              display_name: rawDisplayName,
+              full_name: rawFullName,
+              username: rawUsername,
+            }),
+            full_name: rawFullName,
             avatar_url: direct?.avatar_url || rpc?.avatar_url || '',
             cover_image_url: direct?.cover_image_url || rpc?.cover_image_url || undefined,
             bio: typeof direct?.bio !== 'undefined' ? direct.bio : (rpc?.bio ?? null),
@@ -254,7 +314,7 @@ export function useFriends() {
     ...(user && profile ? [{
       id: user.id,
       username: profile.username || '',
-      display_name: profile.display_name || '',
+      display_name: resolveProfileDisplayName(profile, 'You'),
       full_name: profile.full_name || '',
       avatar_url: profile.avatar_url || '',
       bio: profile.bio || '',
