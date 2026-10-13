@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { motion, useMotionValue, useSpring } from 'framer-motion';
+import { motion, useMotionValue, useSpring } from 'motion/react';
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -204,7 +204,7 @@ const SmoothCaret = ({ editor, containerRef }: { editor: any, containerRef: Reac
           caretY.set(relativeY);
           caretHeight.set(height);
           caretOpacity.set(1);
-        } catch (e) {
+        } catch {
           // Ignore if coords can't be resolved
         }
       });
@@ -277,7 +277,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
   // Update editor content when the prop changes (e.g., when a new note is loaded)
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
+      editor.commands.setContent(content, { emitUpdate: false });
     }
   }, [content, editor]);
 

@@ -1,16 +1,17 @@
 import { useMemo } from 'react';
 import type { AppData } from '../lib/dataManager';
 import { format, eachDayOfInterval, startOfWeek, endOfWeek, isToday, isAfter, startOfDay, getDayOfYear, getDaysInYear } from 'date-fns';
-import { getDayCompletionInfo } from '../lib/dataManager';
+import { getHeatmapDayCellModel } from '../lib/dataManager';
 import { cn } from '../lib/utils';
 
 interface ContributionGraphProps {
   year: number;
   data: AppData;
   onDayClick: (date: Date) => void;
+  variant?: 'personal' | 'public-aggregated';
 }
 
-export function ContributionGraph({ year, data, onDayClick }: ContributionGraphProps) {
+export function ContributionGraph({ year, data, onDayClick, variant = 'personal' }: ContributionGraphProps) {
   const heatmapData = useMemo(() => {
     const startDate = new Date(year, 0, 1);
     const endDate = new Date(year, 11, 31);
@@ -106,16 +107,10 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
                 }
 
                 const dateStr = format(day, 'yyyy-MM-dd');
-                const info = getDayCompletionInfo(data, dateStr);
+                const cell = getHeatmapDayCellModel(data, dateStr, variant);
+                const { level } = cell;
                 const isTodayFlag = isToday(day);
                 const isFutureFlag = isAfter(startOfDay(day), today);
-
-                let level = 0;
-                if (info.percent > 0) level = 1;
-                if (info.percent >= 25) level = 2;
-                if (info.percent >= 50) level = 3;
-                if (info.percent >= 75) level = 4;
-                if (info.completedCount > 0 && info.totalCount === 0 && info.completed) level = 4;
 
                 return (
                   <div
@@ -142,17 +137,34 @@ export function ContributionGraph({ year, data, onDayClick }: ContributionGraphP
                       <div className="text-[11px] font-bold tracking-wide mb-2.5 text-textMain/90">{format(day, 'EEEE, MMMM d, yyyy')}</div>
                       {isFutureFlag ? (
                          <div className="text-[10px] text-textMuted font-bold uppercase tracking-wider">Future Date</div>
-                      ) : info.totalCount === 0 && info.completedCount === 0 ? (
+                      ) : variant === 'public-aggregated' ? (
+                        cell.completedCount === 0 && !cell.manualCompletion ? (
+                          <div className="text-[10px] text-textMuted font-bold uppercase tracking-wider">0 tasks completed</div>
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between gap-6">
+                              <span className="text-[10px] text-textMuted uppercase font-bold tracking-wider">Tasks Completed</span>
+                              <span className={cn("text-[11px] font-bold", cell.completedCount > 0 ? "text-accent drop-shadow-[0_0_4px_rgba(34,197,94,0.3)]" : "text-textMain")}>{cell.completedCount}</span>
+                            </div>
+                            {cell.manualCompletion && (
+                              <div className="flex items-center justify-between gap-6">
+                                <span className="text-[10px] text-textMuted uppercase font-bold tracking-wider">Manual Completion</span>
+                                <span className="text-[11px] font-bold text-accent drop-shadow-[0_0_4px_rgba(34,197,94,0.3)]">Recorded</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      ) : cell.totalCount === 0 && cell.completedCount === 0 ? (
                          <div className="text-[10px] text-textMuted font-bold uppercase tracking-wider">0 tasks completed</div>
                       ) : (
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center justify-between gap-6">
                             <span className="text-[10px] text-textMuted uppercase font-bold tracking-wider">Tasks Completed</span>
-                            <span className="text-[11px] font-bold text-textMain">{info.completedCount} / {info.totalCount === 0 ? info.completedCount : info.totalCount}</span>
+                            <span className="text-[11px] font-bold text-textMain">{cell.completedCount} / {cell.totalCount === 0 ? cell.completedCount : cell.totalCount}</span>
                           </div>
                           <div className="flex items-center justify-between gap-6">
                             <span className="text-[10px] text-textMuted uppercase font-bold tracking-wider">Completion</span>
-                            <span className={cn("text-[11px] font-bold", level > 0 ? "text-accent drop-shadow-[0_0_4px_rgba(34,197,94,0.3)]" : "text-textMain")}>{info.percent}%</span>
+                            <span className={cn("text-[11px] font-bold", level > 0 ? "text-accent drop-shadow-[0_0_4px_rgba(34,197,94,0.3)]" : "text-textMain")}>{cell.percent}%</span>
                           </div>
                         </div>
                       )}

@@ -14,8 +14,7 @@ import { DayPlanner } from '../components/DayPlanner';
 import { AddTaskModal } from '../components/AddTaskModal';
 import { getTasksForDate, parseTaskMetadata } from '../lib/dataManager';
 import type { Task } from '../lib/dataManager';
-import * as Icons from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 export function CalendarPage() {
   const [view, setView] = useState<'day' | 'month' | 'year'>('month');
@@ -580,7 +579,7 @@ export function CalendarPage() {
           <div className="bg-surface border border-border/60 rounded-2xl p-4 md:p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-[11px] tracking-widest font-bold text-textMuted uppercase">{format(moreTasksDate, 'EEEE · MMMM d')}</h3>
-              <button onClick={() => setMoreTasksDate(null)} className="text-textMuted hover:text-textMain p-1"><Icons.X size={16} /></button>
+              <button onClick={() => setMoreTasksDate(null)} className="text-textMuted hover:text-textMain p-1"><X size={16} /></button>
             </div>
             <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-2">
               {(() => {

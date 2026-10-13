@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import { DataManager, calculateStreakFromDates } from '../lib/dataManager';
+import { calculateStreakFromDates } from '../lib/streakUtils';
 
 export type Profile = {
   id: string;
@@ -101,6 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     try {
+      const { DataManager } = await import('../lib/dataManager');
       DataManager.clearData();
       sessionStorage.clear();
       setUser(null);
@@ -124,10 +125,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const migrateLocalData = async () => {
     if (!user) return;
-    const local = DataManager.loadData();
-    if (!local || Object.keys(local.days).length === 0) return;
 
     try {
+      const { DataManager } = await import('../lib/dataManager');
+      const local = DataManager.loadData();
+      if (!local || Object.keys(local.days).length === 0) return;
+
       const { data: result, error: rpcError } = await supabase.rpc('migrate_user_local_data', {
         payload: local
       });

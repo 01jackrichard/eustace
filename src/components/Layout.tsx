@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { Loader2, PanelLeft } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { cn } from '../lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 export function ProtectedLayout() {
   const { user, profile, loading, refreshProfile } = useAuth();

@@ -16,20 +16,22 @@ interface DayPlannerProps {
   hook: any;
 }
 
-import * as Icons from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { getTaskIcon } from '../lib/iconRegistry';
 
 // Heuristic to pick an icon based on task title
 function getTaskIconAndColor(task: Task, isCompleted: boolean) {
   const meta = parseTaskMetadata(task);
   const t = task.name.toLowerCase();
   
-  let Icon: any = Circle;
+  let Icon: LucideIcon = Circle;
   let color = "text-textMuted";
   let bg = "bg-surface";
   let border = "border-border/60";
 
-  if (meta.icon && (Icons as any)[meta.icon]) {
-    Icon = (Icons as any)[meta.icon];
+  const customIcon = getTaskIcon(meta.icon);
+  if (customIcon) {
+    Icon = customIcon;
     color = "text-accent"; // Selected custom icon gets accent color by default
     bg = "bg-accent/10";
     border = "border-accent/20";

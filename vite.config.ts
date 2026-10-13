@@ -9,7 +9,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'maskable-icon-512x512.png'],
+      // Prevent vite-plugin-pwa from re-adding manifest/public icons that are already matched by workbox.globPatterns
+      includeManifestIcons: false,
       manifest: {
         name: 'Eustace',
         short_name: 'Eustace',
@@ -45,13 +46,30 @@ export default defineConfig({
         start_url: '/',
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,jpg}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,jpg,webp}'],
+        // Defer the Landing-page decorative hero image (hero-hands-new.webp) to runtime caching.
+        globIgnores: ['**/hero-hands-new.webp', '**/hero-hands-hd.png', '**/hero-hands-new.png'],
         // We do NOT want to cache Supabase requests!
         // Vite PWA automatically ignores cross-origin requests by default, 
         // but let's be explicit to only cache our own origin just in case.
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching: [
+          {
+            // Cache decorative Landing hero image on demand (same-origin only)
+            urlPattern: /\/hero-hands-new\.webp$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'decorative-images-cache',
+              expiration: {
+                maxEntries: 5,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
           {
             // Cache Google Fonts
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -94,27 +112,37 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['motion/react', 'dialkit']
+    include: ['motion/react']
   },
   build: {
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks(id: string) {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
-              return 'vendor';
-            }
-            if (id.includes('lucide-react') || id.includes('framer-motion') || id.includes('react-hot-toast')) {
-              return 'ui';
-            }
-            if (id.includes('@supabase')) {
-              return 'supabase';
-            }
-            if (id.includes('date-fns') || id.includes('rrule')) {
-              return 'date';
-            }
-          }
+        codeSplitting: {
+          groups: [
+            // Exact React runtime & routing core packages
+            {
+              name: 'vendor',
+              test: /[/\\]node_modules[/\\](react|react-dom|scheduler|react-router|react-router-dom)[/\\]/,
+            },
+            // UI libraries, icons, and notifications
+            {
+              name: 'ui',
+              test: /[/\\]node_modules[/\\](lucide-react|framer-motion|react-hot-toast)[/\\]/,
+            },
+            // Supabase client and auth/storage SDKs (evaluated before 'date' so shared tslib helpers stay in 'supabase')
+            {
+              name: 'supabase',
+              test: /[/\\]node_modules[/\\]@supabase[/\\]/,
+            },
+            // Date manipulation & recurrence engine (loaded lazily only by routes that use date-fns/rrule)
+            {
+              name: 'date',
+              test: /[/\\]node_modules[/\\](date-fns|rrule)[/\\]/,
+            },
+            // Notes editor (@tiptap/*, prosemirror-*) is intentionally omitted so Rollup/Rolldown
+            // co-locates them with the lazy NoteEditorPage chunk.
+          ]
         }
       }
     }

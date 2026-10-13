@@ -122,9 +122,12 @@ export function useNotesData() {
       .match({ id, user_id: user.id });
 
     if (error) {
-      if (showToast) toast.error('Failed to save note');
+      toast.error('Failed to save note');
       fetchNotes(); // Revert
       return false;
+    }
+    if (showToast) {
+      toast.success('Note saved');
     }
     return true;
   }, [user, fetchNotes]);

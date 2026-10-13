@@ -1,8 +1,8 @@
 import { SmoothInput } from './ui/SmoothInput';
 import { useState, useEffect, useRef } from 'react';
-import { X, Check, ChevronDown, Clock } from 'lucide-react';
+import { X, Check, ChevronDown, Clock, Plus } from 'lucide-react';
 import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from 'date-fns';
-import * as Icons from 'lucide-react';
+import { getTaskIcon } from '../lib/iconRegistry';
 import type { Task, TaskMetadata } from '../lib/dataManager';
 import { parseTaskMetadata, serializeTaskMetadata } from '../lib/dataManager';
 import { cn } from '../lib/utils';
@@ -204,7 +204,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
     }
   };
 
-  const SelectedIcon = icon ? (Icons as any)[icon] : null;
+  const SelectedIcon = getTaskIcon(icon);
 
   return (
     <>
@@ -232,7 +232,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                 className="w-12 h-12 shrink-0 rounded-xl border border-border/60 bg-background/50 hover:bg-white/5 hover:border-textMuted transition-all flex items-center justify-center group text-textMuted"
                 title="Choose Icon"
               >
-                {SelectedIcon ? <SelectedIcon size={22} className="text-textMain group-hover:scale-110 transition-transform" /> : <Icons.Plus size={20} />}
+                {SelectedIcon ? <SelectedIcon size={22} className="text-textMain group-hover:scale-110 transition-transform" /> : <Plus size={20} />}
               </button>
               <div className="flex-1 min-w-0">
                 <SmoothInput

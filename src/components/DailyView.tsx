@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, addDays, subDays, isToday, isBefore, startOfDay } from 'date-fns';
-import { Check, ChevronLeft, ChevronRight, Plus, MoreVertical, Trash2, Edit2, Repeat, CheckCircle2, Circle } from 'lucide-react';
-import * as Icons from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Plus, MoreVertical, Trash2, Edit2, Repeat, CheckCircle2, Circle, Activity, BookOpen, Code, Coffee, Moon, Briefcase, Heart, type LucideIcon } from 'lucide-react';
+import { getTaskIcon } from '../lib/iconRegistry';
 import { cn } from '../lib/utils';
 import { getTasksForDate, getDayCompletionInfo, parseTaskMetadata, serializeTaskMetadata, sortTasksChronologically, type AppData, type Task } from '../lib/dataManager';
 import { AddTaskModal } from './AddTaskModal';
@@ -207,17 +207,17 @@ export function DailyView({ date, setDate, data, hook }: DailyViewProps) {
                 const isRecurring = task.recurring !== 'none';
                 const meta = parseTaskMetadata(task);
 
-                let SelectedIcon: any = meta.icon ? (Icons as any)[meta.icon] : null;
+                let SelectedIcon: LucideIcon | null = getTaskIcon(meta.icon);
                 if (!SelectedIcon) {
                   // Heuristic fallback matching DayPlanner
                   const t = task.name.toLowerCase();
-                  if (t.includes('workout') || t.includes('gym') || t.includes('exercise') || t.includes('run') || t.includes('swim')) SelectedIcon = Icons.Activity;
-                  else if (t.includes('study') || t.includes('read') || t.includes('learn') || t.includes('french')) SelectedIcon = Icons.BookOpen;
-                  else if (t.includes('code') || t.includes('dsa') || t.includes('dev') || t.includes('program')) SelectedIcon = Icons.Code;
-                  else if (t.includes('food') || t.includes('breakfast') || t.includes('lunch') || t.includes('dinner') || t.includes('coffee')) SelectedIcon = Icons.Coffee;
-                  else if (t.includes('sleep') || t.includes('rest') || t.includes('nap')) SelectedIcon = Icons.Moon;
-                  else if (t.includes('work') || t.includes('meeting') || t.includes('call')) SelectedIcon = Icons.Briefcase;
-                  else if (t.includes('health') || t.includes('meditate') || t.includes('care')) SelectedIcon = Icons.Heart;
+                  if (t.includes('workout') || t.includes('gym') || t.includes('exercise') || t.includes('run') || t.includes('swim')) SelectedIcon = Activity;
+                  else if (t.includes('study') || t.includes('read') || t.includes('learn') || t.includes('french')) SelectedIcon = BookOpen;
+                  else if (t.includes('code') || t.includes('dsa') || t.includes('dev') || t.includes('program')) SelectedIcon = Code;
+                  else if (t.includes('food') || t.includes('breakfast') || t.includes('lunch') || t.includes('dinner') || t.includes('coffee')) SelectedIcon = Coffee;
+                  else if (t.includes('sleep') || t.includes('rest') || t.includes('nap')) SelectedIcon = Moon;
+                  else if (t.includes('work') || t.includes('meeting') || t.includes('call')) SelectedIcon = Briefcase;
+                  else if (t.includes('health') || t.includes('meditate') || t.includes('care')) SelectedIcon = Heart;
                   else SelectedIcon = Circle;
                 }
 

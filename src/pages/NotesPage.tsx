@@ -1,5 +1,5 @@
 import { SmoothInput } from '../components/ui/SmoothInput';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNotesData } from '../hooks/useNotesData';
 import { formatDistanceToNow } from 'date-fns';
 import { Search, Plus, Folder, Pin, FileText, Trash2, Edit2, Archive, Loader2, ChevronDown } from 'lucide-react';
@@ -7,10 +7,18 @@ import { Link, useNavigate, Outlet, useParams } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { FolderModal, ConfirmModal } from '../components/NotesModals';
 import { useDebounce } from '../hooks/useDebounce';
-import type { NoteFolder } from '../hooks/useNotesData';
+import type { Note, NoteFolder } from '../hooks/useNotesData';
+
+export interface NotesOutletContext {
+  notes: Note[];
+  folders: NoteFolder[];
+  updateNote: (id: string, updates: Partial<Note>, showToast?: boolean) => Promise<boolean | undefined>;
+  deleteNote: (id: string) => Promise<void>;
+  refresh: () => Promise<void>;
+}
 
 export function NotesPage() {
-  const { notes, folders, loading, createNote, createFolder, updateFolder, deleteFolder } = useNotesData();
+  const { notes, folders, loading, createNote, createFolder, updateFolder, deleteFolder, updateNote, deleteNote: removeNote, refresh } = useNotesData();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
@@ -19,6 +27,7 @@ export function NotesPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | 'all' | 'pinned' | 'unfiled'>('all');
   const [isViewDropdownOpen, setIsViewDropdownOpen] = useState(false);
   const viewDropdownRef = useRef<HTMLDivElement>(null);
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<NoteFolder | null>(null);
@@ -34,10 +43,19 @@ export function NotesPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleNewNoteRef = useRef<() => void>(() => {});
-  useEffect(() => { handleNewNoteRef.current = () => { createNote(selectedFolderId !== 'all' && selectedFolderId !== 'pinned' && selectedFolderId !== 'unfiled' ? selectedFolderId : null).then(newNote => { if (newNote) navigate(`/notes/${newNote.id}`); }); }; });
-
-  const handleNewNote = () => handleNewNoteRef.current();
+  const handleNewNote = useCallback(async () => {
+    if (isCreatingNote) return;
+    setIsCreatingNote(true);
+    try {
+      const folderId = selectedFolderId !== 'all' && selectedFolderId !== 'pinned' && selectedFolderId !== 'unfiled' ? selectedFolderId : null;
+      const newNote = await createNote(folderId);
+      if (newNote) {
+        navigate(`/notes/${newNote.id}`);
+      }
+    } finally {
+      setIsCreatingNote(false);
+    }
+  }, [createNote, isCreatingNote, navigate, selectedFolderId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -47,12 +65,12 @@ export function NotesPage() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
-        handleNewNoteRef.current();
+        handleNewNote();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [handleNewNote]);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -174,10 +192,11 @@ export function NotesPage() {
 
             <button
               onClick={handleNewNote}
-              className="p-1.5 bg-accent/10 text-accent hover:bg-accent hover:text-white rounded-lg transition-colors"
+              disabled={isCreatingNote}
+              className="p-1.5 bg-accent/10 text-accent hover:bg-accent hover:text-white rounded-lg transition-colors disabled:opacity-50"
               title="New Note"
             >
-              <Plus size={16} />
+              {isCreatingNote ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             </button>
           </div>
           
@@ -198,8 +217,12 @@ export function NotesPage() {
           {filteredNotes.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center p-8 text-textMuted">
               <p className="text-sm mb-4">No notes found.</p>
-              <button onClick={handleNewNote} className="px-4 py-1.5 border border-border/40 rounded-lg text-xs font-bold text-textMain hover:border-textMuted transition-all">
-                Create Note
+              <button 
+                onClick={handleNewNote} 
+                disabled={isCreatingNote}
+                className="px-4 py-1.5 border border-border/40 rounded-lg text-xs font-bold text-textMain hover:border-textMuted transition-all disabled:opacity-50"
+              >
+                {isCreatingNote ? "Creating..." : "Create Note"}
               </button>
             </div>
           ) : (
@@ -248,7 +271,16 @@ export function NotesPage() {
         !id ? "hidden lg:flex" : "flex"
       )}>
         {id ? (
-          <Outlet />
+          <Outlet
+            key={id}
+            context={{
+              notes,
+              folders,
+              updateNote,
+              deleteNote: removeNote,
+              refresh,
+            } satisfies NotesOutletContext}
+          />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8 animate-fade-in">
             <div className="w-16 h-16 mb-4 rounded-2xl bg-[#111111] flex items-center justify-center text-textMuted border border-border/20 shadow-sm">
@@ -260,9 +292,10 @@ export function NotesPage() {
             </p>
             <button
               onClick={handleNewNote}
-              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#111111] hover:bg-[#1a1a1a] border border-border/40 text-textMain rounded-xl text-sm font-bold tracking-wide transition-all shadow-sm"
+              disabled={isCreatingNote}
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#111111] hover:bg-[#1a1a1a] border border-border/40 text-textMain rounded-xl text-sm font-bold tracking-wide transition-all shadow-sm disabled:opacity-50"
             >
-              <Plus size={16} className="text-accent" /> New Note
+              {isCreatingNote ? <Loader2 size={16} className="text-accent animate-spin" /> : <Plus size={16} className="text-accent" />} New Note
             </button>
           </div>
         )}

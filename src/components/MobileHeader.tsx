@@ -9,7 +9,7 @@ export function MobileHeader() {
     <div className="md:hidden fixed top-0 inset-x-0 bg-[#050505]/95 backdrop-blur-xl border-b border-border/60 z-50 px-5 flex items-center justify-between pt-[env(safe-area-inset-top)] h-[calc(56px+env(safe-area-inset-top))]">
       <div className="flex items-center gap-3">
         <Link to="/dashboard" className="flex items-center gap-2">
-          <img src="/logo.png" alt="Eustace Logo" className="h-5 w-5 object-contain" />
+          <img src="/logo.webp" alt="Eustace Logo" className="h-5 w-5 object-contain" />
           <span className="text-[10px] md:text-xs font-bold tracking-widest text-textMain uppercase">EUSTACE</span>
         </Link>
       </div>

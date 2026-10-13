@@ -1,15 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
   eachDayOfInterval,
   startOfWeek,
   endOfWeek,
   getDaysInYear,
+  format,
 } from 'date-fns';
 import {
   getDayCompletionInfo,
+  getHeatmapDayCellModel,
   type AppData,
   type Task,
 } from '../lib/dataManager';
+import { ContributionGraph } from '../components/ContributionGraph';
 import {
   rotateHeatmapColumnBins,
   isHeatmapGhostBin,
@@ -272,5 +277,408 @@ describe('Productivity Activity Heatmap - Logic & Model Verification', () => {
     // When 2026 is selected:
     expect(isHeatmapGhostBin(bin2025, range2026)).toBe(true);
     expect(isHeatmapGhostBin(bin2026, range2026)).toBe(false);
+  });
+
+  describe('Public Aggregated vs Personal Heatmap Mode (getHeatmapDayCellModel)', () => {
+    const buildAggregatedDay = (date: string, count: number, manualCompletion = false) => {
+      const tasks: Task[] = [];
+      const completedTaskIds: string[] = [];
+      for (let i = 0; i < count; i++) {
+        const id = `agg-${date}-${i}`;
+        completedTaskIds.push(id);
+        tasks.push({
+          id,
+          name: 'Completed Task',
+          recurring: 'none',
+          createdAt: date,
+        });
+      }
+      return { tasks, completedTaskIds, manualCompletion };
+    };
+
+    const publicAggregatedData: AppData = {
+      version: 2,
+      days: {
+        '2026-02-01': buildAggregatedDay('2026-02-01', 0, false),
+        '2026-02-02': buildAggregatedDay('2026-02-02', 1, false),
+        '2026-02-03': buildAggregatedDay('2026-02-03', 2, false),
+        '2026-02-04': buildAggregatedDay('2026-02-04', 3, false),
+        '2026-02-05': buildAggregatedDay('2026-02-05', 4, false),
+        '2026-02-06': buildAggregatedDay('2026-02-06', 7, false),
+        '2026-02-07': buildAggregatedDay('2026-02-07', 0, true),
+        '2026-02-08': buildAggregatedDay('2026-02-08', 1, true),
+        '2026-02-09': buildAggregatedDay('2026-02-09', 2, true),
+        '2026-02-10': buildAggregatedDay('2026-02-10', 4, true),
+      },
+      recurringTasks: [],
+      settings: { theme: 'dark', weekStartsOn: 1 },
+    };
+
+    it('derives public-aggregated cell intensity directly from 0 through 4+ task completions without fabricated denominator or percent', () => {
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-01', 'public-aggregated')).toEqual({
+        level: 0,
+        completedCount: 0,
+        totalCount: null,
+        percent: null,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-02', 'public-aggregated')).toEqual({
+        level: 1,
+        completedCount: 1,
+        totalCount: null,
+        percent: null,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-03', 'public-aggregated')).toEqual({
+        level: 2,
+        completedCount: 2,
+        totalCount: null,
+        percent: null,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-04', 'public-aggregated')).toEqual({
+        level: 3,
+        completedCount: 3,
+        totalCount: null,
+        percent: null,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-05', 'public-aggregated')).toEqual({
+        level: 4,
+        completedCount: 4,
+        totalCount: null,
+        percent: null,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-06', 'public-aggregated')).toEqual({
+        level: 4,
+        completedCount: 7,
+        totalCount: null,
+        percent: null,
+        manualCompletion: false,
+      });
+    });
+
+    it('handles manual-only completion days in public-aggregated mode as visibly active (level 1) with 0 completed tasks', () => {
+      const manualOnlyCell = getHeatmapDayCellModel(
+        publicAggregatedData,
+        '2026-02-07',
+        'public-aggregated'
+      );
+
+      expect(manualOnlyCell).toEqual({
+        level: 1,
+        completedCount: 0,
+        totalCount: null,
+        percent: null,
+        manualCompletion: true,
+      });
+    });
+
+    it('handles combined task + manual completion in public-aggregated mode accurately without inflating task counts', () => {
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-08', 'public-aggregated')).toEqual({
+        level: 1,
+        completedCount: 1,
+        totalCount: null,
+        percent: null,
+        manualCompletion: true,
+      });
+
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-09', 'public-aggregated')).toEqual({
+        level: 2,
+        completedCount: 2,
+        totalCount: null,
+        percent: null,
+        manualCompletion: true,
+      });
+
+      expect(getHeatmapDayCellModel(publicAggregatedData, '2026-02-10', 'public-aggregated')).toEqual({
+        level: 4,
+        completedCount: 4,
+        totalCount: null,
+        percent: null,
+        manualCompletion: true,
+      });
+    });
+
+    it('handles empty years and unrecorded dates cleanly in both public-aggregated and personal modes', () => {
+      const emptyYearData: AppData = {
+        version: 2,
+        days: {},
+        recurringTasks: [],
+        settings: { theme: 'dark', weekStartsOn: 1 },
+      };
+
+      expect(getHeatmapDayCellModel(emptyYearData, '2026-06-15', 'public-aggregated')).toEqual({
+        level: 0,
+        completedCount: 0,
+        totalCount: null,
+        percent: null,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(emptyYearData, '2026-06-15', 'personal')).toEqual({
+        level: 0,
+        completedCount: 0,
+        totalCount: 0,
+        percent: 0,
+        manualCompletion: false,
+      });
+    });
+
+    it('preserves unchanged personal heatmap behavior (percentage-based levels and manual-completion 100%)', () => {
+      expect(getHeatmapDayCellModel(sampleData, '2026-01-05')).toEqual({
+        level: 0,
+        completedCount: 0,
+        totalCount: 4,
+        percent: 0,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(sampleData, '2026-01-06')).toEqual({
+        level: 1,
+        completedCount: 1,
+        totalCount: 5,
+        percent: 20,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(sampleData, '2026-01-07')).toEqual({
+        level: 2,
+        completedCount: 1,
+        totalCount: 3,
+        percent: 33,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(sampleData, '2026-01-08')).toEqual({
+        level: 3,
+        completedCount: 2,
+        totalCount: 3,
+        percent: 67,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(sampleData, '2026-01-09')).toEqual({
+        level: 4,
+        completedCount: 3,
+        totalCount: 4,
+        percent: 75,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(sampleData, '2026-01-10')).toEqual({
+        level: 4,
+        completedCount: 4,
+        totalCount: 4,
+        percent: 100,
+        manualCompletion: false,
+      });
+
+      expect(getHeatmapDayCellModel(sampleData, '2026-01-11')).toEqual({
+        level: 4,
+        completedCount: 1,
+        totalCount: 1,
+        percent: 100,
+        manualCompletion: true,
+      });
+    });
+
+    it('renders ContributionGraph UI in public-aggregated mode with accurate level classes, manual-only active state, and tooltips free of N / N or %', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      try {
+        const html = renderToStaticMarkup(
+          createElement(ContributionGraph, {
+            year: 2026,
+            data: publicAggregatedData,
+            onDayClick: () => {},
+            variant: 'public-aggregated',
+          })
+        );
+
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(warnSpy).not.toHaveBeenCalled();
+
+        // Extract individual day cells by splitting on cell wrapper class
+        const cellSegments = html.split('class="w-full aspect-square relative group/cell"').slice(1);
+        expect(cellSegments.length).toBe(365);
+
+        const findCellByDate = (dateStr: string) => {
+          const [y, m, d] = dateStr.split('-').map(Number);
+          const label = format(new Date(y, m - 1, d), 'EEEE, MMMM d, yyyy');
+          const cell = cellSegments.find(seg => seg.includes(`>${label}<`));
+          expect(cell, `Expected rendered cell for ${dateStr} (${label})`).toBeDefined();
+          return cell!;
+        };
+
+        // 1. Verify level classes for 0, 1, 2, 3, 4, and 7 (4+) completions
+        const cell0 = findCellByDate('2026-02-01');
+        expect(cell0).toContain('bg-[#161616] border border-border/30');
+        expect(cell0).toContain('>0 tasks completed<');
+
+        const cell1 = findCellByDate('2026-02-02');
+        expect(cell1).toContain('bg-accent/20 border border-accent/20');
+        expect(cell1).toContain('>Tasks Completed<');
+        expect(cell1).toContain('>1<');
+        expect(cell1).not.toContain('Manual Completion');
+
+        const cell2 = findCellByDate('2026-02-03');
+        expect(cell2).toContain('bg-accent/40 border border-accent/40');
+        expect(cell2).toContain('>Tasks Completed<');
+        expect(cell2).toContain('>2<');
+
+        const cell3 = findCellByDate('2026-02-04');
+        expect(cell3).toContain('bg-accent/70 border border-accent/70');
+        expect(cell3).toContain('>Tasks Completed<');
+        expect(cell3).toContain('>3<');
+
+        const cell4 = findCellByDate('2026-02-05');
+        expect(cell4).toContain('bg-accent border border-accent ');
+        expect(cell4).toContain('>Tasks Completed<');
+        expect(cell4).toContain('>4<');
+
+        const cell7 = findCellByDate('2026-02-06');
+        expect(cell7).toContain('bg-accent border border-accent ');
+        expect(cell7).toContain('>Tasks Completed<');
+        expect(cell7).toContain('>7<');
+
+        // 2. Verify manual-only day (2026-02-07) is visibly active (level 1) with 0 completed tasks
+        const cellManualOnly = findCellByDate('2026-02-07');
+        expect(cellManualOnly).toContain('bg-accent/20 border border-accent/20');
+        expect(cellManualOnly).not.toContain('bg-[#161616]');
+        expect(cellManualOnly).not.toContain('bg-accent border border-accent ');
+        expect(cellManualOnly).toContain('>Tasks Completed<');
+        expect(cellManualOnly).toContain('>0<');
+        expect(cellManualOnly).toContain('>Manual Completion<');
+        expect(cellManualOnly).toContain('>Recorded<');
+
+        // 3. Verify combined task + manual completion days
+        const cellCombined2 = findCellByDate('2026-02-09');
+        expect(cellCombined2).toContain('bg-accent/40 border border-accent/40');
+        expect(cellCombined2).toContain('>Tasks Completed<');
+        expect(cellCombined2).toContain('>2<');
+        expect(cellCombined2).toContain('>Manual Completion<');
+        expect(cellCombined2).toContain('>Recorded<');
+
+        // 4. Verify NO public tooltip ever displays N / N or a completion percentage
+        for (const seg of cellSegments) {
+          expect(seg).not.toContain('>Completion<');
+          expect(seg).not.toMatch(/>\d+%</);
+          expect(seg).not.toMatch(/>\d+\s*\/\s*\d+</);
+        }
+      } finally {
+        errorSpy.mockRestore();
+        warnSpy.mockRestore();
+      }
+    });
+
+    it('renders ContributionGraph UI in personal mode (default) with completed / total counts and Completion percentage unchanged', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        const html = renderToStaticMarkup(
+          createElement(ContributionGraph, {
+            year: 2026,
+            data: sampleData,
+            onDayClick: () => {},
+          })
+        );
+
+        expect(errorSpy).not.toHaveBeenCalled();
+
+        const cellSegments = html.split('class="w-full aspect-square relative group/cell"').slice(1);
+        const findCellByDate = (dateStr: string) => {
+          const [y, m, d] = dateStr.split('-').map(Number);
+          const label = format(new Date(y, m - 1, d), 'EEEE, MMMM d, yyyy');
+          return cellSegments.find(seg => seg.includes(`>${label}<`))!;
+        };
+
+        // 0/4 (0%) -> level 0
+        const personal0 = findCellByDate('2026-01-05');
+        expect(personal0).toContain('bg-[#161616] border border-border/30');
+        expect(personal0).toContain('>0 / 4<');
+        expect(personal0).toContain('>0%<');
+
+        // 1/5 (20%) -> level 1
+        const personal20 = findCellByDate('2026-01-06');
+        expect(personal20).toContain('bg-accent/20 border border-accent/20');
+        expect(personal20).toContain('>1 / 5<');
+        expect(personal20).toContain('>20%<');
+
+        // 1/3 (33%) -> level 2
+        const personal33 = findCellByDate('2026-01-07');
+        expect(personal33).toContain('bg-accent/40 border border-accent/40');
+        expect(personal33).toContain('>1 / 3<');
+        expect(personal33).toContain('>33%<');
+
+        // 2/3 (67%) -> level 3
+        const personal67 = findCellByDate('2026-01-08');
+        expect(personal67).toContain('bg-accent/70 border border-accent/70');
+        expect(personal67).toContain('>2 / 3<');
+        expect(personal67).toContain('>67%<');
+
+        // 3/4 (75%) -> level 4
+        const personal75 = findCellByDate('2026-01-09');
+        expect(personal75).toContain('bg-accent border border-accent ');
+        expect(personal75).toContain('>3 / 4<');
+        expect(personal75).toContain('>75%<');
+
+        // Manual-only in personal mode -> level 4, 1 / 1, 100%
+        const personalManual = findCellByDate('2026-01-11');
+        expect(personalManual).toContain('bg-accent border border-accent ');
+        expect(personalManual).toContain('>1 / 1<');
+        expect(personalManual).toContain('>100%<');
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('renders empty years and year navigation (2025 vs leap-year 2024) accurately in ContributionGraph', () => {
+      const emptyYearData: AppData = {
+        version: 2,
+        days: {},
+        recurringTasks: [],
+        settings: { theme: 'dark', weekStartsOn: 1 },
+      };
+
+      const html2025 = renderToStaticMarkup(
+        createElement(ContributionGraph, {
+          year: 2025,
+          data: emptyYearData,
+          onDayClick: () => {},
+          variant: 'public-aggregated',
+        })
+      );
+      const cells2025 = html2025.split('class="w-full aspect-square relative group/cell"').slice(1);
+      expect(cells2025.length).toBe(365);
+      expect(html2025).toContain('>2025 PROGRESS<');
+      expect(html2025).toContain('>365 / 365 days<');
+      expect(html2025).toContain('>(0 remaining)<');
+      for (const seg of cells2025) {
+        expect(seg).toContain('bg-[#161616] border border-border/30');
+        expect(seg).toContain('>0 tasks completed<');
+      }
+
+      const html2024 = renderToStaticMarkup(
+        createElement(ContributionGraph, {
+          year: 2024,
+          data: emptyYearData,
+          onDayClick: () => {},
+          variant: 'public-aggregated',
+        })
+      );
+      const cells2024 = html2024.split('class="w-full aspect-square relative group/cell"').slice(1);
+      expect(cells2024.length).toBe(366);
+      expect(html2024).toContain('>2024 PROGRESS<');
+      expect(html2024).toContain('>366 / 366 days<');
+      expect(html2024).toContain('>(0 remaining)<');
+    });
   });
 });

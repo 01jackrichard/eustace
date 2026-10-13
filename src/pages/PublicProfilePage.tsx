@@ -372,6 +372,7 @@ const fetchFriendship = useCallback(async (targetId: string) => {
                       year={currentYear}
                       data={productivityData}
                       onDayClick={() => {}}
+                      variant="public-aggregated"
                     />
                   </div>
                 ) : (

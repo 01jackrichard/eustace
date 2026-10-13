@@ -33,8 +33,6 @@
     "d3-shape": "^3.2.0",
     "date-fns": "^4.4.0",
     "dialkit": "^2.0.2",
-    "dotenv": "^18.0.6",
-    "framer-motion": "^14.0.0",
     "lucide-react": "^1.50.0",
     "motion": "^14.0.0",
     "react": "^19.2.8",

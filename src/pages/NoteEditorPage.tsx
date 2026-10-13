@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate, Link, useOutletContext } from 'react-router-dom';
 import { useNotesData, type Note } from '../hooks/useNotesData';
+import type { NotesOutletContext } from './NotesPage';
 import { supabase } from '../lib/supabase';
 import { RichTextEditor } from '../components/RichTextEditor';
 import TextareaAutosize from 'react-textarea-autosize';
@@ -13,38 +14,51 @@ import toast from 'react-hot-toast';
 export function NoteEditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { notes, folders, updateNote, deleteNote } = useNotesData();
+  const outletContext = useOutletContext<NotesOutletContext | undefined>();
+  const fallbackData = useNotesData();
+  const { notes, folders, updateNote, deleteNote } = outletContext ?? fallbackData;
 
-  const [note, setNote] = useState<Note | null>(null);
-  const [noteLoading, setNoteLoading] = useState(true);
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const notesRef = useRef(notes);
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
 
-      const [showMenu, setShowMenu] = useState(false);
+  const initialNote = id ? notes.find(n => n.id === id) ?? null : null;
+
+  const [note, setNote] = useState<Note | null>(initialNote);
+  const [noteLoading, setNoteLoading] = useState(!initialNote);
+  const [title, setTitle] = useState(initialNote?.title ?? '');
+  const [content, setContent] = useState(initialNote?.content ?? '');
+
+  const [showMenu, setShowMenu] = useState(false);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
 
-    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const saveGenerationRef = useRef(0);
-  const latestTitleRef = useRef('');
-  const latestContentRef = useRef('');
-
-  useEffect(() => {
-    latestTitleRef.current = title;
-  }, [title]);
-
-  useEffect(() => {
-    latestContentRef.current = content;
-  }, [content]);
+  const loadedNoteIdRef = useRef<string | null>(id ?? null);
+  const isDirtyRef = useRef(false);
+  const latestTitleRef = useRef(initialNote?.title ?? '');
+  const latestContentRef = useRef(initialNote?.content ?? '');
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!id) return;
     let active = true;
 
+    // Fast path: if note was not found at initial render, check latest in-memory cache
+    const cached = notesRef.current.find(n => n.id === id);
+    if (cached) {
+      setNote(cached);
+      setTitle(cached.title);
+      setContent(cached.content || '');
+      latestTitleRef.current = cached.title;
+      latestContentRef.current = cached.content || '';
+      loadedNoteIdRef.current = id ?? null;
+      setNoteLoading(false);
+    }
+
     async function fetchSingleNote() {
-      setNoteLoading(true);
       const { data: singleNote, error } = await supabase
         .from('notes')
         .select('*')
@@ -53,89 +67,130 @@ export function NoteEditorPage() {
 
       if (!active) return;
       if (error || !singleNote) {
-        toast.error('Note not found or deleted');
-        navigate('/notes', { replace: true });
+        // If not found in DB and not found in memory
+        const inMemory = notesRef.current.some(n => n.id === id);
+        if (!inMemory) {
+          toast.error('Note not found or deleted');
+          navigate('/notes', { replace: true });
+        }
         return;
       }
 
       setNote(singleNote as Note);
-      setTitle(singleNote.title);
-      setContent(singleNote.content || '');
-      latestTitleRef.current = singleNote.title;
-      latestContentRef.current = singleNote.content || '';
+      loadedNoteIdRef.current = id ?? null;
+      // Only sync title/content from remote if user has not already made local edits
+      if (!isDirtyRef.current) {
+        setTitle(singleNote.title);
+        setContent(singleNote.content || '');
+        latestTitleRef.current = singleNote.title;
+        latestContentRef.current = singleNote.content || '';
+      }
       setNoteLoading(false);
     }
 
     fetchSingleNote();
     return () => { active = false; };
   }, [id, navigate]);
-  // Debounced Save
-  const triggerSave = (newTitle: string, newContent: string) => {
-    
+
+  // Debounced Save bound strictly to targetNoteId
+  const triggerSave = useCallback((newTitle: string, newContent: string) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    const currentGen = ++saveGenerationRef.current;
+    const targetNoteId = loadedNoteIdRef.current;
+    if (!targetNoteId) return;
 
     saveTimeoutRef.current = setTimeout(async () => {
-      if (!id || currentGen !== saveGenerationRef.current) return;
-      
-      await updateNote(id, { title: newTitle.trim() || 'Untitled', content: newContent }, false);
-      if (currentGen === saveGenerationRef.current) {
-        
+      if (!targetNoteId || loadedNoteIdRef.current !== targetNoteId || !isDirtyRef.current) return;
+
+      const success = await updateNote(
+        targetNoteId, 
+        { title: newTitle.trim() || 'Untitled', content: newContent }, 
+        false
+      );
+      if (success && loadedNoteIdRef.current === targetNoteId) {
+        isDirtyRef.current = false;
       }
     }, 1000);
-  };
+  }, [updateNote]);
 
-  // Flush on unmount to prevent data loss
+  // Flush on unmount ONLY if modified, strictly bound to the note that was edited
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = undefined;
       }
-      if (id && (latestTitleRef.current || latestContentRef.current)) {
-        updateNote(id, { 
-          title: latestTitleRef.current.trim() || 'Untitled', 
-          content: latestContentRef.current 
-        }, false);
+      const targetNoteId = loadedNoteIdRef.current;
+      if (targetNoteId && isDirtyRef.current) {
+        isDirtyRef.current = false;
+        updateNote(
+          targetNoteId, 
+          { 
+            title: latestTitleRef.current.trim() || 'Untitled', 
+            content: latestContentRef.current 
+          }, 
+          false
+        );
       }
     };
-  }, [id, updateNote]);
+  }, [updateNote]);
+
+  // Manual save flush (Ctrl+S / Cmd+S)
+  const flushSave = useCallback(async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = undefined;
+    }
+    const targetNoteId = loadedNoteIdRef.current;
+    if (!targetNoteId || !isDirtyRef.current) return;
+
+    isDirtyRef.current = false;
+    await updateNote(
+      targetNoteId,
+      {
+        title: latestTitleRef.current.trim() || 'Untitled',
+        content: latestContentRef.current,
+      },
+      false
+    );
+  }, [updateNote]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        const currentGen = ++saveGenerationRef.current;
-        if (id) {
-          
-          updateNote(id, { title: latestTitleRef.current.trim() || 'Untitled', content: latestContentRef.current }, false).then(() => {
-            if (currentGen === saveGenerationRef.current) {
-              
-            }
-          });
-        }
+        flushSave();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [id, updateNote]);
+  }, [flushSave]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const newTitle = e.target.value;
     setTitle(newTitle);
+    latestTitleRef.current = newTitle;
+    isDirtyRef.current = true;
     triggerSave(newTitle, latestContentRef.current);
   };
 
-  
+  const handleContentChange = (newContent: string) => {
+    setContent(newContent);
+    latestContentRef.current = newContent;
+    isDirtyRef.current = true;
+    triggerSave(latestTitleRef.current, newContent);
+  };
+
   const handleTogglePin = async () => {
     if (!note) return;
     const newPinned = !note.is_pinned;
     setNote({ ...note, is_pinned: newPinned });
-    await updateNote(note.id, { is_pinned: newPinned });
+    await updateNote(note.id, { is_pinned: newPinned }, false);
   };
 
   const handleDelete = async () => {
     if (!note) return;
+    isDirtyRef.current = false;
+    loadedNoteIdRef.current = null;
     await deleteNote(note.id);
     navigate('/notes');
   };
@@ -232,10 +287,7 @@ export function NoteEditorPage() {
 
         <RichTextEditor 
           content={content} 
-          onChange={(newContent) => {
-            setContent(newContent);
-            triggerSave(title, newContent);
-          }} 
+          onChange={handleContentChange} 
         />
         
         {/* Backlinks */}

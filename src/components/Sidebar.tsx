@@ -56,7 +56,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
       >
         <div className="p-6 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Eustace Logo" className="h-6 w-6 object-contain" />
+            <img src="/logo.webp" alt="Eustace Logo" className="h-6 w-6 object-contain" />
             <h1 className="text-sm font-bold tracking-widest text-textMain uppercase">EUSTACE</h1>
           </div>
           <button

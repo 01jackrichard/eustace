@@ -22,6 +22,7 @@ export function Landing() {
   );
   const [scrollY, setScrollY] = useState(0);
   const [activeSection, setActiveSection] = useState("hero");
+  const [heroImageError, setHeroImageError] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -143,7 +144,7 @@ export function Landing() {
             onClick={() => scrollTo("hero")}
             className="flex items-center hover:opacity-80 transition-opacity"
           >
-            <img src="/logo.png" alt="Eustace Logo" className="h-6 w-6 object-contain" />
+            <img src="/logo.webp" alt="Eustace Logo" className="h-6 w-6 object-contain" />
           </button>
 
           {/* Desktop Nav */}
@@ -295,12 +296,20 @@ export function Landing() {
           <div className="absolute inset-y-0 right-0 w-[15%] bg-gradient-to-l from-[#050505] to-transparent z-10 pointer-events-none opacity-80" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_20%,_#050505_100%)] z-10 pointer-events-none opacity-40" />
 
-          <img
-            src="/hero-hands-new.png"
-            alt="Eustace Classical Hands"
-            className="absolute inset-0 w-full h-full object-cover object-center"
-            style={{ transform: `translateY(${scrollY * 0.15}px)` }}
-          />
+          {!heroImageError ? (
+            <img
+              src="/hero-hands-new.webp"
+              alt="Eustace Classical Hands"
+              onError={() => setHeroImageError(true)}
+              className="absolute inset-0 w-full h-full object-cover object-center"
+              style={{ transform: `translateY(${scrollY * 0.15}px)` }}
+            />
+          ) : (
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.04)_0%,_transparent_70%)]"
+            />
+          )}
         </div>
 
         {/* Typography Content */}
@@ -707,7 +716,7 @@ export function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="col-span-1 md:col-span-2">
               <div className="mb-4">
-                <img src="/logo.png" alt="Eustace Logo" className="h-6 w-6 object-contain opacity-90" />
+                <img src="/logo.webp" alt="Eustace Logo" className="h-6 w-6 object-contain opacity-90" />
               </div>
               <p className="text-xs text-textMuted leading-relaxed max-w-xs">
                 Built for consistency,

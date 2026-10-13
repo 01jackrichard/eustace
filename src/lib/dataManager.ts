@@ -1,6 +1,9 @@
-import { differenceInDays, format, parseISO, subDays, getDay, isBefore, startOfDay } from 'date-fns';
+import { differenceInDays, format, parseISO, getDay, isBefore, startOfDay } from 'date-fns';
 import { RRule } from 'rrule';
 import { parseTimeString } from './timeUtils';
+import { calculateStreakFromDates } from './streakUtils';
+
+export { calculateStreakFromDates };
 
 export type TaskMetadata = {
   notes?: string;
@@ -297,35 +300,61 @@ export const getDayCompletionInfo = (data: AppData, dateStr: string) => {
   };
 };
 
-export const calculateStreakFromDates = (dateStrings: string[]): number => {
-  if (!dateStrings || dateStrings.length === 0) return 0;
+export interface HeatmapDayCellModel {
+  level: 0 | 1 | 2 | 3 | 4;
+  completedCount: number;
+  totalCount: number | null;
+  percent: number | null;
+  manualCompletion: boolean;
+}
 
-  const uniqueDateStrs = new Set(
-    dateStrings.map(d => d.split('T')[0]).filter(Boolean)
-  );
+export const getHeatmapDayCellModel = (
+  data: AppData,
+  dateStr: string,
+  variant: 'personal' | 'public-aggregated' = 'personal'
+): HeatmapDayCellModel => {
+  const dayData = data.days[dateStr];
+  const manualCompletion = !!dayData?.manualCompletion;
 
-  if (uniqueDateStrs.size === 0) return 0;
+  if (variant === 'public-aggregated') {
+    const allTasks = getTasksForDate(data, dateStr);
+    const validTasks = allTasks.filter(t => parseTaskMetadata(t).status !== 'cancelled');
+    const taskCompletedCount =
+      validTasks.length > 0
+        ? validTasks.filter(t => dayData?.completedTaskIds.includes(t.id)).length
+        : 0;
 
-  const today = startOfDay(new Date());
-  const todayStr = format(today, 'yyyy-MM-dd');
-  const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
+    let level: 0 | 1 | 2 | 3 | 4 = 0;
+    if (taskCompletedCount >= 4) level = 4;
+    else if (taskCompletedCount === 3) level = 3;
+    else if (taskCompletedCount === 2) level = 2;
+    else if (taskCompletedCount === 1) level = 1;
+    else if (manualCompletion) level = 1;
 
-  const hasToday = uniqueDateStrs.has(todayStr);
-  const hasYesterday = uniqueDateStrs.has(yesterdayStr);
-
-  if (!hasToday && !hasYesterday) {
-    return 0;
+    return {
+      level,
+      completedCount: taskCompletedCount,
+      totalCount: null,
+      percent: null,
+      manualCompletion
+    };
   }
 
-  let cur = hasToday ? today : subDays(today, 1);
-  let streak = 0;
+  const info = getDayCompletionInfo(data, dateStr);
+  let level: 0 | 1 | 2 | 3 | 4 = 0;
+  if (info.percent > 0) level = 1;
+  if (info.percent >= 25) level = 2;
+  if (info.percent >= 50) level = 3;
+  if (info.percent >= 75) level = 4;
+  if (info.completedCount > 0 && info.totalCount === 0 && info.completed) level = 4;
 
-  while (uniqueDateStrs.has(format(cur, 'yyyy-MM-dd'))) {
-    streak++;
-    cur = subDays(cur, 1);
-  }
-
-  return streak;
+  return {
+    level,
+    completedCount: info.completedCount,
+    totalCount: info.totalCount,
+    percent: info.percent,
+    manualCompletion
+  };
 };
 
 export const calculateLongestStreakFromDates = (dateStrings: string[]): number => {

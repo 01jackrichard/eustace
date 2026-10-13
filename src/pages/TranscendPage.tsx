@@ -1,6 +1,6 @@
 import { Crown, Flame, Loader2, Trophy, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { motion, type Variants } from 'framer-motion';
+import { motion, type Variants } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useFriends } from '../hooks/useFriends';
 

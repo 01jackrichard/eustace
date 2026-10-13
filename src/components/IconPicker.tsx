@@ -1,33 +1,9 @@
 import { useState } from 'react';
-import * as Icons from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { ICON_CATEGORIES, getTaskIcon } from '../lib/iconRegistry';
 
-export const ICON_CATEGORIES = [
-  {
-    name: 'Study & Knowledge',
-    icons: ['BookOpen', 'Brain', 'GraduationCap', 'Library', 'NotebookPen', 'Pencil', 'Languages', 'Calculator', 'Lightbulb']
-  },
-  {
-    name: 'Work & Technology',
-    icons: ['Laptop', 'Code', 'Terminal', 'BriefcaseBusiness', 'Monitor', 'FileText', 'Target', 'FolderKanban']
-  },
-  {
-    name: 'Health & Fitness',
-    icons: ['Dumbbell', 'Activity', 'Footprints', 'Bike', 'HeartPulse', 'PersonStanding', 'Moon', 'Sun', 'Coffee', 'Droplets']
-  },
-  {
-    name: 'Daily Life',
-    icons: ['House', 'Utensils', 'Bed', 'Bath', 'Pill', 'ShoppingBasket', 'Wallet', 'CalendarDays']
-  },
-  {
-    name: 'Hobbies & Personal',
-    icons: ['Gamepad2', 'Music', 'Headphones', 'Camera', 'Palette', 'Trophy', 'Puzzle', 'Timer', 'Clock', 'Sparkles']
-  },
-  {
-    name: 'General',
-    icons: ['CheckCircle2', 'ListTodo', 'Star', 'Zap', 'Flag', 'Circle', 'Bookmark']
-  }
-];
+export { ICON_CATEGORIES };
 
 interface IconPickerProps {
   selectedIcon: string | null;
@@ -52,13 +28,13 @@ export function IconPicker({ selectedIcon, onSelect, onClose }: IconPickerProps)
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-textMain tracking-wide uppercase">Select Icon</h3>
             <button onClick={onClose} className="p-1.5 text-textMuted hover:text-textMain hover:bg-white/5 rounded-lg transition-colors">
-              <Icons.X size={18} />
+              <X size={18} />
             </button>
           </div>
           
           {/* Search */}
           <div className="relative">
-            <Icons.Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
             <input
               type="text"
               placeholder="Search icons..."
@@ -77,7 +53,7 @@ export function IconPicker({ selectedIcon, onSelect, onClose }: IconPickerProps)
               <div className="text-[10px] font-bold tracking-[0.2em] text-textMuted uppercase mb-3 px-1">{cat.name}</div>
               <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
                 {cat.icons.map(iconName => {
-                  const Icon = (Icons as any)[iconName];
+                  const Icon = getTaskIcon(iconName);
                   if (!Icon) return null;
                   const isSelected = selectedIcon === iconName;
                   

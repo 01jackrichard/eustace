@@ -5,9 +5,10 @@ import {
   useMotionValue,
   useReducedMotion,
   useSpring,
-} from "framer-motion";
+} from "motion/react";
 import React, {
   type ComponentPropsWithoutRef,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -60,6 +61,17 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
   const activeType = type as SmoothInputType;
   const displayPlaceholder = placeholder ?? "";
 
+  const isEmail = activeType === "email";
+  const resolvedType = isEmail ? "text" : activeType;
+  const resolvedInputMode = props.inputMode ?? (isEmail ? "email" : undefined);
+  const resolvedAutoCapitalize =
+    props.autoCapitalize ?? (isEmail ? "none" : undefined);
+  const resolvedAutoCorrect =
+    props.autoCorrect ?? (isEmail ? "off" : undefined);
+  const resolvedSpellCheck = props.spellCheck ?? (isEmail ? false : undefined);
+  const resolvedAutoComplete =
+    props.autoComplete ?? (isEmail ? "email" : undefined);
+
   const syncMeasureSpan = () => {
     const input = inputRef.current;
     const measureSpan = measureRef.current;
@@ -77,7 +89,10 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
       fontSize = `${parseFloat(fontSize) + 6.25}px`;
     }
 
-    measureSpan.style.font = `${styles.fontStyle} ${styles.fontWeight} ${fontSize} ${styles.fontFamily}`;
+    measureSpan.style.fontFamily = styles.fontFamily;
+    measureSpan.style.fontSize = fontSize;
+    measureSpan.style.fontWeight = styles.fontWeight;
+    measureSpan.style.fontStyle = styles.fontStyle;
     measureSpan.style.letterSpacing = styles.letterSpacing;
     measureSpan.style.fontFeatureSettings = styles.fontFeatureSettings;
     measureSpan.style.fontVariationSettings = styles.fontVariationSettings;
@@ -124,8 +139,18 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
   };
 
   const getCaretIndex = (target: HTMLInputElement) => {
-    const selectionStart = target.selectionStart ?? 0;
-    const selectionEnd = target.selectionEnd ?? 0;
+    let selectionStart: number | null = null;
+    let selectionEnd: number | null = null;
+    try {
+      selectionStart = target.selectionStart;
+      selectionEnd = target.selectionEnd;
+    } catch {
+      return target.value.length;
+    }
+
+    if (selectionStart === null || selectionEnd === null) {
+      return target.value.length;
+    }
 
     if (selectionStart === selectionEnd) {
       return selectionStart;
@@ -136,10 +161,21 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
       : selectionEnd;
   };
 
-  const updateCaretFromInput = (target: HTMLInputElement) => {
-    const selectionStart = target.selectionStart ?? 0;
-    const selectionEnd = target.selectionEnd ?? 0;
-    const hasSelection = selectionStart !== selectionEnd;
+  const updateCaretFromInput = useCallback((target: HTMLInputElement) => {
+    let selectionStart: number | null = null;
+    let selectionEnd: number | null = null;
+    try {
+      selectionStart = target.selectionStart;
+      selectionEnd = target.selectionEnd;
+    } catch {
+      // Selection unsupported on this input type
+    }
+
+    const hasSelection =
+      selectionStart !== null &&
+      selectionEnd !== null &&
+      selectionStart !== selectionEnd;
+
     const caretIndex = getCaretIndex(target);
     const isPassword = target.type === "password";
     const textBeforeCaret = isPassword
@@ -160,7 +196,7 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
     const isCaretVisible =
       caretPosition >= minX && caretPosition <= maxX + 1;
 
-    caretX.set(Math.min(caretPosition, maxX));
+    caretX.set(Math.max(minX, Math.min(caretPosition, maxX)));
 
     if (!isCaretVisible || hasSelection) {
       caretOpacity.set(0);
@@ -168,26 +204,21 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
     }
 
     caretOpacity.set(1);
-  };
-
-  const updateCaretRef = useRef(updateCaretFromInput);
-  updateCaretRef.current = updateCaretFromInput;
-  const caretOpacityRef = useRef(caretOpacity);
-  caretOpacityRef.current = caretOpacity;
+  }, [caretX, caretOpacity]);
 
   useEffect(() => {
     const input = inputRef.current;
     if (input && document.activeElement === input) {
-      updateCaretRef.current(input);
+      updateCaretFromInput(input);
     }
-  }, [inputValue]);
+  }, [inputValue, updateCaretFromInput]);
 
   useEffect(() => {
     const input = inputRef.current;
     if (input && document.activeElement === input) {
-      updateCaretRef.current(input);
+      updateCaretFromInput(input);
     }
-  }, [activeType]);
+  }, [activeType, updateCaretFromInput]);
 
   useEffect(() => {
     const input = inputRef.current;
@@ -196,7 +227,7 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
 
     const updateCaretIfFocused = () => {
       if (document.activeElement === input) {
-        updateCaretRef.current(input);
+        updateCaretFromInput(input);
       }
     };
 
@@ -205,7 +236,7 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
 
       requestAnimationFrame(() => {
         if (document.activeElement === input) {
-          updateCaretRef.current(input);
+          updateCaretFromInput(input);
         }
       });
     };
@@ -226,7 +257,7 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
       input.removeEventListener("scroll", updateCaretIfFocused);
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [updateCaretFromInput]);
 
   return (
     <div className={cn("relative w-full", wrapperClassName)}>
@@ -242,7 +273,12 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
             if (typeof forwardedRef === 'function') forwardedRef(node);
             else if (forwardedRef) forwardedRef.current = node;
           }}
-          type={activeType}
+          type={resolvedType}
+          inputMode={resolvedInputMode}
+          autoCapitalize={resolvedAutoCapitalize}
+          autoCorrect={resolvedAutoCorrect}
+          spellCheck={resolvedSpellCheck}
+          autoComplete={resolvedAutoComplete}
           placeholder={displayPlaceholder}
           className={cn(
             "w-full bg-transparent outline-none placeholder:text-foreground/40",
@@ -255,15 +291,35 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
             if (!isControlled) setInternalValue(e.target.value);
             onChange?.(e);
             requestAnimationFrame(() => {
-              updateCaretRef.current(e.target);
+              updateCaretFromInput(e.target);
             });
           }}
+          onSelect={(e) => {
+            updateCaretFromInput(e.currentTarget);
+            props.onSelect?.(e);
+          }}
+          onClick={(e) => {
+            updateCaretFromInput(e.currentTarget);
+            props.onClick?.(e);
+          }}
+          onKeyUp={(e) => {
+            updateCaretFromInput(e.currentTarget);
+            props.onKeyUp?.(e);
+          }}
+          onKeyDown={(e) => {
+            requestAnimationFrame(() => {
+              if (inputRef.current) {
+                updateCaretFromInput(inputRef.current);
+              }
+            });
+            props.onKeyDown?.(e);
+          }}
           onFocus={(e) => {
-             updateCaretRef.current(e.target);
-             props.onFocus?.(e);
+            updateCaretFromInput(e.target);
+            props.onFocus?.(e);
           }}
           onBlur={(e) => {
-            caretOpacityRef.current.set(0);
+            caretOpacity.set(0);
             onBlur?.(e);
           }}
         />
@@ -273,7 +329,7 @@ const SmoothInput = React.forwardRef<HTMLInputElement, SmoothInputProps>(({
           className="pointer-events-none invisible absolute top-0 left-0 whitespace-pre"
         />
         <motion.div
-          className="bg-orange-500 pointer-events-none col-start-1 col-end-2 row-start-1 row-end-2 h-[1em] w-[2px] self-center"
+          className="bg-orange-500 pointer-events-none col-start-1 col-end-2 row-start-1 row-end-2 h-[1em] w-[2px] self-center justify-self-start"
           style={{ x: springCaretX, opacity: caretOpacity }}
         />
       </div>
