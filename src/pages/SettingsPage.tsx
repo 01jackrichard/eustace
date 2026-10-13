@@ -40,13 +40,26 @@ export function SettingsPage() {
     if (!user) return;
     setIsExporting(true);
     try {
-      const [profileRes, tasksRes, completionsRes, dailyRes, foldersRes, notesRes] = await Promise.all([
+      const [
+        profileRes,
+        tasksRes,
+        completionsRes,
+        dailyRes,
+        foldersRes,
+        notesRes,
+        messagesRes,
+        friendshipsRes,
+        prefsRes
+      ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', user.id).single(),
         supabase.from('tasks').select('*').eq('user_id', user.id),
         supabase.from('task_completions').select('*').eq('user_id', user.id),
         supabase.from('daily_data').select('*').eq('user_id', user.id),
         supabase.from('folders').select('*').eq('user_id', user.id),
-        supabase.from('notes').select('*').eq('user_id', user.id)
+        supabase.from('notes').select('*').eq('user_id', user.id),
+        supabase.from('messages').select('*').eq('sender_id', user.id),
+        supabase.from('friendships').select('*').or('requester_id.eq.' + user.id + ',addressee_id.eq.' + user.id),
+        supabase.from('user_preferences').select('*').eq('user_id', user.id).single()
       ]);
 
       const exportPayload = {
@@ -57,11 +70,14 @@ export function SettingsPage() {
           email: user.email,
           profile: profileRes.data || null
         },
+        preferences: prefsRes.data || null,
         tasks: tasksRes.data || [],
         completions: completionsRes.data || [],
         dailyLogs: dailyRes.data || [],
         folders: foldersRes.data || [],
-        notes: notesRes.data || []
+        notes: notesRes.data || [],
+        sentMessages: messagesRes.data || [],
+        friendships: friendshipsRes.data || []
       };
 
       const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
@@ -143,17 +159,22 @@ export function SettingsPage() {
     try {
       // 1. Client-side storage pre-cleanup attempt for avatar and cover files
       try {
-        const [avatarFiles, coverFiles] = await Promise.all([
+        const [avatarFiles, coverFiles, messageFiles] = await Promise.all([
           supabase.storage.from('profile-images').list('', { search: user.id }),
-          supabase.storage.from('profile-covers').list('', { search: user.id })
+          supabase.storage.from('profile-covers').list('', { search: user.id }),
+          supabase.storage.from('message-images').list('', { search: user.id })
         ]);
         const avatarNames = avatarFiles.data?.map(f => f.name) || [];
         const coverNames = coverFiles.data?.map(f => f.name) || [];
+        const messageNames = messageFiles.data?.map(f => f.name) || [];
         if (avatarNames.length > 0) {
           await supabase.storage.from('profile-images').remove(avatarNames);
         }
         if (coverNames.length > 0) {
           await supabase.storage.from('profile-covers').remove(coverNames);
+        }
+        if (messageNames.length > 0) {
+          await supabase.storage.from('message-images').remove(messageNames);
         }
       } catch (storageErr) {
         console.warn('[STORAGE_CLEANUP] Client storage cleanup warning:', storageErr);

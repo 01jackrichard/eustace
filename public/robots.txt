@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /settings
+Disallow: /chat/
+
+Sitemap: https://eustace-pi.vercel.app/sitemap.xml

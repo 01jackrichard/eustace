@@ -1,5 +1,5 @@
-import { lazy, Suspense, type ComponentType } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect, type ComponentType } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { ProtectedLayout } from './components/Layout';
 import { Toaster } from 'react-hot-toast';
 import { PWAReloadPrompt } from './components/PWAReloadPrompt';
@@ -49,6 +49,7 @@ const PublicProfilePage = safeLazy(() => import('./pages/PublicProfilePage').the
 const SettingsPage = safeLazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const PrivacyPage = safeLazy(() => import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
 const TermsPage = safeLazy(() => import('./pages/TermsPage').then(m => ({ default: m.TermsPage })));
+const NotFoundPage = safeLazy(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 
 function RouteFallback() {
   return (
@@ -58,8 +59,56 @@ function RouteFallback() {
   );
 }
 
+function useDynamicDocumentTitle() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const pathname = location.pathname;
+    let title = 'Eustace — Personal Productivity & Focus';
+
+    if (pathname === '/') {
+      title = 'Eustace — Personal Productivity & Focus';
+    } else if (pathname === '/dashboard') {
+      title = 'Dashboard — Eustace';
+    } else if (pathname === '/tasks') {
+      title = 'Daily Tasks — Eustace';
+    } else if (pathname === '/calendar') {
+      title = 'Calendar — Eustace';
+    } else if (pathname.startsWith('/notes')) {
+      title = 'Notes — Eustace';
+    } else if (pathname === '/analytics') {
+      title = 'Analytics — Eustace';
+    } else if (pathname === '/friends') {
+      title = 'Friends — Eustace';
+    } else if (pathname.startsWith('/chat')) {
+      title = 'Chat — Eustace';
+    } else if (pathname === '/transcend') {
+      title = 'Transcend — Eustace';
+    } else if (pathname === '/settings') {
+      title = 'Settings — Eustace';
+    } else if (pathname === '/profile') {
+      title = 'Profile — Eustace';
+    } else if (pathname.startsWith('/u/')) {
+      title = 'Public Profile — Eustace';
+    } else if (pathname === '/login') {
+      title = 'Log In — Eustace';
+    } else if (pathname === '/signup') {
+      title = 'Sign Up — Eustace';
+    } else if (pathname === '/privacy') {
+      title = 'Privacy Policy — Eustace';
+    } else if (pathname === '/terms') {
+      title = 'Terms of Service — Eustace';
+    } else {
+      title = '404 Not Found — Eustace';
+    }
+
+    document.title = title;
+  }, [location.pathname]);
+}
+
 function App() {
   useGlobalShortcuts();
+  useDynamicDocumentTitle();
   return (
     <ErrorBoundary>
       <Toaster position="bottom-center" toastOptions={{
@@ -95,7 +144,7 @@ function App() {
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

@@ -11,11 +11,41 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const titleId = useRef(`modal-title-${Math.random().toString(36).substring(2, 9)}`).current;
+
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusables = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     };
-    if (isOpen) window.addEventListener('keydown', handleKeyDown);
+
+    window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
@@ -27,13 +57,19 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       onClick={onClose}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="w-full max-w-sm bg-surface border-t border-x md:border border-border/60 rounded-t-2xl md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 overflow-hidden pb-[env(safe-area-inset-bottom)] flex flex-col max-h-[90dvh]"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
-          <h3 className="text-xs font-bold tracking-widest text-textMuted uppercase">{title}</h3>
+          <h3 id={titleId} className="text-xs font-bold tracking-widest text-textMuted uppercase">{title}</h3>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close dialog"
             className="p-1 text-textMuted hover:text-textMain hover:bg-surfaceHover rounded transition-colors"
           >
             <X size={16} />

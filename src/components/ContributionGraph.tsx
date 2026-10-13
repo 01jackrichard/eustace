@@ -122,18 +122,18 @@ export function ContributionGraph({ year, data, onDayClick, variant = 'personal'
                       onClick={() => onDayClick(day)}
                       className={cn(
                         "w-full h-full rounded-[2px] transition-all duration-300 block",
-                        isFutureFlag ? "bg-[#0a0a0a] border border-border/10 group-hover/cell:border-border/30" :
+                        isFutureFlag ? "bg-background border border-border/10 group-hover/cell:border-border/30" :
                         level === 0 ? "bg-[#161616] border border-border/30 group-hover/cell:border-textMuted/60" :
                         level === 1 ? "bg-accent/20 border border-accent/20 group-hover/cell:border-accent/60 group-hover/cell:scale-110" :
                         level === 2 ? "bg-accent/40 border border-accent/40 group-hover/cell:border-accent group-hover/cell:scale-110" :
                         level === 3 ? "bg-accent/70 border border-accent/70 group-hover/cell:border-accent group-hover/cell:scale-110 shadow-[0_0_8px_rgba(34,197,94,0.25)]" :
                         "bg-accent border border-accent group-hover/cell:bg-accentHover group-hover/cell:scale-110 shadow-[0_0_12px_rgba(34,197,94,0.4)]",
-                        isTodayFlag ? "ring-[1.5px] ring-offset-[1.5px] ring-offset-[#101010] ring-textMain/40 z-10" : ""
+                        isTodayFlag ? "ring-[1.5px] ring-offset-[1.5px] ring-offset-background ring-textMain/40 z-10" : ""
                       )}
                     />
 
                     {/* Tooltip */}
-                    <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 mb-1 w-max bg-[#141414] border border-border/60 text-textMain rounded-xl p-3.5 opacity-0 group-hover/cell:opacity-100 transition-all duration-200 pointer-events-none shadow-2xl z-50 transform group-hover/cell:-translate-y-1 scale-95 group-hover/cell:scale-100">
+                    <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 mb-1 w-max bg-surface border border-border/60 text-textMain rounded-xl p-3.5 opacity-0 group-hover/cell:opacity-100 transition-all duration-200 pointer-events-none shadow-2xl z-50 transform group-hover/cell:-translate-y-1 scale-95 group-hover/cell:scale-100">
                       <div className="text-[11px] font-bold tracking-wide mb-2.5 text-textMain/90">{format(day, 'EEEE, MMMM d, yyyy')}</div>
                       {isFutureFlag ? (
                          <div className="text-[10px] text-textMuted font-bold uppercase tracking-wider">Future Date</div>
@@ -185,7 +185,7 @@ export function ContributionGraph({ year, data, onDayClick, variant = 'personal'
             <>
               <div className="text-[10px] font-bold text-textMuted uppercase tracking-wider">{year} PROGRESS</div>
               <div className="flex items-center gap-2">
-                <div className="w-24 md:w-32 h-[4px] bg-[#161616] rounded-full overflow-hidden border border-border/40">
+                <div className="w-24 md:w-32 h-[4px] bg-surface rounded-full overflow-hidden border border-border/40">
                   <div className="h-full bg-textMuted/40" style={{ width: `${(dayOfYear / daysInYear) * 100}%` }} />
                 </div>
                 <span className="text-[10px] font-bold text-textMain">{dayOfYear} / {daysInYear} days</span>
@@ -196,7 +196,7 @@ export function ContributionGraph({ year, data, onDayClick, variant = 'personal'
             <>
               <div className="text-[10px] font-bold text-textMuted uppercase tracking-wider">{year} PROGRESS</div>
               <div className="flex items-center gap-2">
-                <div className="w-24 md:w-32 h-[4px] bg-[#161616] rounded-full overflow-hidden border border-border/40">
+                <div className="w-24 md:w-32 h-[4px] bg-surface rounded-full overflow-hidden border border-border/40">
                   <div className="h-full bg-textMuted/40" style={{ width: '100%' }} />
                 </div>
                 <span className="text-[10px] font-bold text-textMain">{daysInYear} / {daysInYear} days</span>
