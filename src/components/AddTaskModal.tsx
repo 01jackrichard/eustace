@@ -171,7 +171,7 @@ function DatePickerPopover({
         zIndex: 150,
       }}
       className={cn(
-        "w-[280px] max-w-[calc(100vw-24px)] bg-[#0d0d0d] border border-border/70 rounded-2xl shadow-2xl p-4 select-none animate-in fade-in duration-150",
+        "w-[280px] max-w-[calc(100vw-24px)] bg-surface border border-border/70 rounded-2xl shadow-2xl p-4 select-none animate-in fade-in duration-150",
         coords?.placement === 'top' ? "slide-in-from-bottom-2" : "slide-in-from-top-2"
       )}
     >
@@ -259,11 +259,35 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
   const endDateTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isIconPickerOpen) onClose();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isIconPickerOpen) {
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && modalRef.current && !isIconPickerOpen) {
+        const focusables = modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, isIconPickerOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -317,16 +341,21 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
       <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-background/85 md:p-4 backdrop-blur-md animate-in fade-in duration-200">
         <div
           ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-task-modal-title"
           className="w-full max-w-xl bg-surface border-t border-x md:border border-border/50 rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200 pb-[env(safe-area-inset-bottom)] max-h-[92dvh] flex flex-col"
         >
           {/* Header */}
           <div className="px-6 py-5 border-b border-border/20 flex items-center justify-between shrink-0 bg-surface">
-            <h2 className="text-[11px] font-black tracking-[0.25em] text-textMuted uppercase flex items-center gap-2">
+            <h2 id="add-task-modal-title" className="text-[11px] font-black tracking-[0.25em] text-textMuted uppercase flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-accent" />
               {initialTask ? 'Edit Task' : 'New Task'}
             </h2>
             <button
+              type="button"
               onClick={onClose}
+              aria-label="Close dialog"
               className="text-textMuted hover:text-textMain transition-colors p-1.5 bg-white/5 hover:bg-white/10 rounded-full"
               title="Close (Esc)"
             >
@@ -341,7 +370,8 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
               <button
                 type="button"
                 onClick={() => setIsIconPickerOpen(true)}
-                className="w-12 h-12 shrink-0 rounded-2xl border border-border/60 bg-[#0d0d0d] hover:bg-white/5 hover:border-textMuted/60 transition-all flex items-center justify-center group text-textMuted hover:text-textMain shadow-inner mt-0.5"
+                aria-label="Choose task icon"
+                className="w-12 h-12 shrink-0 rounded-2xl border border-border/60 bg-surface hover:bg-white/5 hover:border-textMuted/60 transition-all flex items-center justify-center group text-textMuted hover:text-textMain shadow-inner mt-0.5"
                 title="Choose Icon"
               >
                 {SelectedIcon ? <SelectedIcon size={22} className="text-textMain group-hover:scale-110 transition-transform" /> : <Plus size={20} />}
@@ -388,7 +418,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
               </div>
 
               {/* Segmented Control: Anytime | Set Time */}
-              <div className="grid grid-cols-2 p-1 bg-[#090909] border border-border/50 rounded-xl gap-1">
+              <div className="grid grid-cols-2 p-1 bg-background border border-border/50 rounded-xl gap-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -426,7 +456,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
               {timeMode === 'set' && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                   {/* Prominent Scheduled Time Card */}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#0a0a0a] border border-border/60">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-surface border border-border/60">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
                         <Clock size={15} />
@@ -473,7 +503,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
               </div>
 
               {/* Segmented Repeat Selector: Off | Daily | Weekly | Monthly | Yearly */}
-              <div className="grid grid-cols-5 p-1 bg-[#090909] border border-border/50 rounded-xl gap-1">
+              <div className="grid grid-cols-5 p-1 bg-background border border-border/50 rounded-xl gap-1">
                 {RECURRENCE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
@@ -512,7 +542,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                       ref={endDateTriggerRef}
                       type="button"
                       onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                      className="flex items-center gap-2 bg-[#0d0d0d] border border-border/60 hover:border-textMuted text-xs font-medium rounded-lg px-3 py-1.5 transition-colors text-textMain"
+                      className="flex items-center gap-2 bg-surface border border-border/60 hover:border-textMuted text-xs font-medium rounded-lg px-3 py-1.5 transition-colors text-textMain"
                       aria-haspopup="dialog"
                       aria-expanded={isDatePickerOpen}
                     >
@@ -555,7 +585,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                className="w-full bg-[#0a0a0a] border border-border/60 rounded-xl p-3 text-sm font-medium text-textMain placeholder:text-textMuted/30 focus:outline-none focus:border-textMuted/60 transition-colors resize-none"
+                className="w-full bg-surface border border-border/60 rounded-xl p-3 text-sm font-medium text-textMain placeholder:text-textMuted/30 focus:outline-none focus:border-textMuted/60 transition-colors resize-none"
               />
             </div>
           </form>

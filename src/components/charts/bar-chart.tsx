@@ -367,13 +367,14 @@ const ChartCore = memo(function ChartCore({
 
   // Create a fake time scale for compatibility with ChartContext
   const fakeTimeScale = useMemo(() => {
-    const now = Date.now();
-    const start = now - data.length * 24 * 60 * 60 * 1000;
+    const spanMs = Math.max(1, data.length) * 86400000;
+    const startDate = new Date(0);
+    const endDate = new Date(spanMs);
     const scale = {
       ...categoryScale,
-      domain: () => [new Date(start), new Date(now)],
+      domain: () => [startDate, endDate],
       range: () => [0, innerWidth] as [number, number],
-      invert: (x: number) => new Date(start + (x / innerWidth) * (now - start)),
+      invert: (x: number) => new Date((x / Math.max(1, innerWidth)) * spanMs),
       copy: () => scale,
     };
     return scale;

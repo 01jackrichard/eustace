@@ -1,5 +1,5 @@
 import { SmoothInput } from './ui/SmoothInput';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Loader2, Upload, User, Check, X, Camera } from 'lucide-react';
@@ -144,22 +144,22 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
     avatarUrl !== (profile?.avatar_url || '') ||
     coverUrl !== (profile?.cover_image_url || '');
 
-  const validateUsername = validateUsernameFormat;
+  const validateUsername = useCallback((u: string) => validateUsernameFormat(u), []);
 
-  useEffect(() => {
+  const [prevNormalizedUsername, setPrevNormalizedUsername] = useState(normalizedInputUsername);
+  if (normalizedInputUsername !== prevNormalizedUsername) {
+    setPrevNormalizedUsername(normalizedInputUsername);
     if (!username || isUsernameUnchanged) {
       setUsernameStatus('idle');
-      setErrorMessage((prev) => (prev === USERNAME_VERIFY_ERROR_MESSAGE ? null : prev));
-      return;
-    }
-    if (!validateUsername(normalizedInputUsername)) {
+      if (errorMessage === USERNAME_VERIFY_ERROR_MESSAGE) {
+        setErrorMessage(null);
+      }
+    } else if (!validateUsername(normalizedInputUsername)) {
       setUsernameStatus('invalid');
-      return;
-    }
-    if (normalizedInputUsername !== debouncedUsername.trim().toLowerCase()) {
+    } else {
       setUsernameStatus('checking');
     }
-  }, [username, isUsernameUnchanged, normalizedInputUsername, debouncedUsername, validateUsername]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -195,7 +195,7 @@ export function EditProfileModal({ onClose }: EditProfileModalProps) {
     return () => {
       cancelled = true;
     };
-  }, [debouncedUsername, normalizedCurrentUsername, profile?.username]);
+  }, [debouncedUsername, normalizedCurrentUsername, profile?.username, validateUsername]);
 
   const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
