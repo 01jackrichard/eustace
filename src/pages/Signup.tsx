@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Loader2, Mail, ExternalLink, ArrowLeft } from 'lucide-react';
+import { Loader2, Mail, ExternalLink, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
 export const SIGNUP_USERNAME_TAKEN_ERROR = 'Username is already taken. Please choose another.';
 export const SIGNUP_USERNAME_VERIFY_ERROR =
@@ -43,6 +43,7 @@ export function Signup() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
@@ -247,7 +248,25 @@ export function Signup() {
           </div>
           <div>
             <label className="block text-xs font-semibold tracking-wider text-textMuted mb-1.5 uppercase">Password</label>
-            <SmoothInput type="password" placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:border-accent/50 outline-none transition-colors" />
+            <div className="relative">
+              <SmoothInput
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter your password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                minLength={6}
+                className="w-full bg-background border border-border rounded-xl px-4 py-2.5 pr-11 text-sm focus:border-accent/50 outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted hover:text-textMain p-1 transition-colors"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           <button type="submit" disabled={loading || googleLoading} className="w-full bg-textMain text-background hover:bg-white font-semibold py-2.5 rounded-xl mt-4 transition-colors flex justify-center items-center h-11 disabled:opacity-50 disabled:hover:bg-textMain">
