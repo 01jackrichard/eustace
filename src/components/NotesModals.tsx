@@ -12,7 +12,7 @@ interface ModalProps {
 
 export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
-  const titleId = useRef(`modal-title-${Math.random().toString(36).substring(2, 9)}`).current;
+  const titleId = React.useId();
 
   useEffect(() => {
     if (!isOpen) return;

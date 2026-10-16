@@ -23,6 +23,7 @@ CREATE TABLE public.profiles (
   cover_image_url text,
   visibility text DEFAULT 'public' CHECK (visibility IN ('private', 'friends', 'public')),
   activity_visibility text DEFAULT 'public' CHECK (activity_visibility IN ('private', 'friends', 'public')),
+  timezone text DEFAULT 'UTC',
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -65,7 +66,8 @@ CREATE TABLE public.tasks (
   description text,
   category text,
   duration text,
-  recurring text DEFAULT 'none' CHECK (recurring IN ('none', 'daily', 'weekdays', 'weekly', 'custom')),
+  recurring text DEFAULT 'none' CHECK (recurring IN ('none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly', 'custom')),
+  start_time time without time zone DEFAULT NULL,
   created_at date NOT NULL DEFAULT current_date,
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -110,6 +112,46 @@ CREATE TABLE public.notes (
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- DIRECT MESSAGING SYSTEM
+CREATE TABLE public.conversations (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user1_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user2_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  last_message_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  CONSTRAINT conversations_user_order CHECK (user1_id < user2_id),
+  CONSTRAINT conversations_no_self CHECK (user1_id != user2_id),
+  CONSTRAINT conversations_unique_pair UNIQUE (user1_id, user2_id)
+);
+
+CREATE TABLE public.conversation_members (
+  conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  last_read_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  last_delivered_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  PRIMARY KEY (conversation_id, user_id)
+);
+
+CREATE TABLE public.messages (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  sender_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  message_type text NOT NULL DEFAULT 'text',
+  text_content text,
+  image_path text,
+  image_metadata jsonb,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX idx_conversations_user1 ON public.conversations(user1_id);
+CREATE INDEX idx_conversations_user2 ON public.conversations(user2_id);
+CREATE INDEX idx_conversations_last_msg ON public.conversations(last_message_at DESC);
+CREATE INDEX idx_conversation_members_user ON public.conversation_members(user_id);
+CREATE INDEX idx_messages_conversation_created ON public.messages(conversation_id, created_at DESC);
+CREATE INDEX idx_messages_sender ON public.messages(sender_id);
 
 -- ==========================================
 -- 3. FUNCTIONS & RPCs
@@ -396,32 +438,252 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- Account Deletion RPC (cascades to storage and auth.users)
-CREATE OR REPLACE FUNCTION public.delete_user_account()
-RETURNS jsonb AS $$
+-- Account Deletion RPC with Password Verification (cascades to storage and auth.users)
+CREATE OR REPLACE FUNCTION public.delete_user_account(p_password text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = extensions, public, pg_temp
+AS $$
 DECLARE
-  v_user_id uuid;
+  v_user_id uuid := auth.uid();
+  v_encrypted_pwd text;
+  v_provider text;
 BEGIN
-  v_user_id := auth.uid();
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- 0. Identity / Reauthentication Verification
+  SELECT encrypted_password, raw_app_meta_data->>'provider'
+  INTO v_encrypted_pwd, v_provider
+  FROM auth.users
+  WHERE id = v_user_id;
+
+  IF v_encrypted_pwd IS NOT NULL AND v_encrypted_pwd <> '' AND COALESCE(v_provider, 'email') = 'email' THEN
+    IF p_password IS NULL OR trim(p_password) = '' THEN
+      RAISE EXCEPTION 'Password verification required to delete account';
+    END IF;
+
+    IF crypt(trim(p_password), v_encrypted_pwd) <> v_encrypted_pwd THEN
+      RAISE EXCEPTION 'Incorrect password. Account deletion unauthorized.';
+    END IF;
   END IF;
 
   -- 1. Remove user storage objects
   DELETE FROM storage.objects 
   WHERE bucket_id IN ('profile-images', 'profile-covers')
-    AND (owner = v_user_id OR (storage.foldername(name))[1] = v_user_id::text);
+    AND (
+      owner = v_user_id
+      OR (storage.foldername(name))[1] = v_user_id::text
+      OR name LIKE (v_user_id::text || '-%')
+      OR name LIKE (v_user_id::text || '/%')
+    );
 
-  -- 2. Delete notes and folders
+  -- 2. Remove user image attachments from private message-images bucket
+  DELETE FROM storage.objects
+  WHERE bucket_id = 'message-images'
+    AND (
+      owner = v_user_id
+      OR (storage.foldername(name))[1] = v_user_id::text
+      OR name IN (
+        SELECT m.image_path
+        FROM public.messages m
+        JOIN public.conversations c ON c.id = m.conversation_id
+        WHERE (c.user1_id = v_user_id OR c.user2_id = v_user_id)
+          AND m.image_path IS NOT NULL
+      )
+    );
+
+  -- 3. Delete notes and folders
   DELETE FROM public.notes WHERE user_id = v_user_id;
   DELETE FROM public.folders WHERE user_id = v_user_id;
 
-  -- 3. Delete from auth.users (cascades to profiles, tasks, task_completions, daily_data, friendships, preferences, stats)
+  -- 4. Delete from auth.users (cascades to profiles, tasks, task_completions, daily_data, friendships, preferences, stats, messages, conversations)
   DELETE FROM auth.users WHERE id = v_user_id;
 
   RETURN jsonb_build_object('success', true);
 END;
+$$;
+
+-- Messaging Helper: are_friends
+CREATE OR REPLACE FUNCTION public.are_friends(u1 uuid, u2 uuid)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.friendships
+    WHERE status = 'accepted'
+      AND ((requester_id = u1 AND addressee_id = u2)
+        OR (requester_id = u2 AND addressee_id = u1))
+  );
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '';
+
+-- Messaging RPC: get_or_create_conversation
+CREATE OR REPLACE FUNCTION public.get_or_create_conversation(friend_user_id uuid)
+RETURNS TABLE (
+  conversation_id uuid,
+  user1_id uuid,
+  user2_id uuid,
+  created boolean
+) AS $$
+DECLARE
+  v_caller_id uuid := auth.uid();
+  v_u1 uuid;
+  v_u2 uuid;
+  v_conv_id uuid;
+  v_is_new boolean := false;
+BEGIN
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  IF friend_user_id IS NULL OR friend_user_id = v_caller_id THEN
+    RAISE EXCEPTION 'Invalid friend user ID';
+  END IF;
+
+  IF NOT public.are_friends(v_caller_id, friend_user_id) THEN
+    RAISE EXCEPTION 'Cannot start conversation: users are not accepted friends';
+  END IF;
+
+  v_u1 := LEAST(v_caller_id, friend_user_id);
+  v_u2 := GREATEST(v_caller_id, friend_user_id);
+
+  INSERT INTO public.conversations (user1_id, user2_id, last_message_at, updated_at)
+  VALUES (v_u1, v_u2, timezone('utc'::text, now()), timezone('utc'::text, now()))
+  ON CONFLICT ON CONSTRAINT conversations_unique_pair 
+  DO UPDATE SET updated_at = timezone('utc'::text, now())
+  RETURNING id INTO v_conv_id;
+
+  INSERT INTO public.conversation_members (conversation_id, user_id, last_read_at, last_delivered_at)
+  VALUES 
+    (v_conv_id, v_u1, timezone('utc'::text, now()), timezone('utc'::text, now())),
+    (v_conv_id, v_u2, timezone('utc'::text, now()), timezone('utc'::text, now()))
+  ON CONFLICT (conversation_id, user_id) DO NOTHING;
+
+  RETURN QUERY SELECT v_conv_id, v_u1, v_u2, (v_is_new);
+END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+-- Messaging RPC: mark_conversation_read
+CREATE OR REPLACE FUNCTION public.mark_conversation_read(p_conversation_id uuid)
+RETURNS void AS $$
+DECLARE
+  v_caller_id uuid := auth.uid();
+  v_now timestamp with time zone := timezone('utc'::text, now());
+BEGIN
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  UPDATE public.conversation_members
+  SET last_read_at = v_now,
+      last_delivered_at = GREATEST(last_delivered_at, v_now)
+  WHERE conversation_id = p_conversation_id 
+    AND user_id = v_caller_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+-- Messaging RPC: acknowledge_message_delivery
+CREATE OR REPLACE FUNCTION public.acknowledge_message_delivery(p_conversation_id uuid)
+RETURNS void AS $$
+DECLARE
+  v_caller_id uuid := auth.uid();
+BEGIN
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  UPDATE public.conversation_members
+  SET last_delivered_at = timezone('utc'::text, now())
+  WHERE conversation_id = p_conversation_id 
+    AND user_id = v_caller_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+-- Suggested Connections RPC
+CREATE OR REPLACE FUNCTION public.get_suggested_connections(p_limit int DEFAULT 20)
+RETURNS TABLE (
+  id uuid,
+  username text,
+  display_name text,
+  full_name text,
+  avatar_url text,
+  bio text,
+  cover_image_url text,
+  mutual_count bigint
+) AS $$
+DECLARE
+  v_current_user uuid;
+BEGIN
+  v_current_user := auth.uid();
+  IF v_current_user IS NULL THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  WITH user_friends AS (
+    SELECT CASE 
+             WHEN f.requester_id = v_current_user THEN f.addressee_id 
+             ELSE f.requester_id 
+           END AS friend_id
+    FROM public.friendships f
+    WHERE f.status = 'accepted'
+      AND (f.requester_id = v_current_user OR f.addressee_id = v_current_user)
+  ),
+  excluded_users AS (
+    SELECT v_current_user AS user_id
+    UNION
+    SELECT CASE 
+             WHEN f.requester_id = v_current_user THEN f.addressee_id 
+             ELSE f.requester_id 
+           END AS user_id
+    FROM public.friendships f
+    WHERE (f.requester_id = v_current_user OR f.addressee_id = v_current_user)
+      AND f.status IN ('pending', 'accepted')
+  ),
+  candidate_profiles AS (
+    SELECT 
+      p.id,
+      p.username,
+      p.display_name,
+      p.full_name,
+      p.avatar_url,
+      p.bio,
+      p.cover_image_url
+    FROM public.profiles p
+    WHERE p.id NOT IN (SELECT user_id FROM excluded_users)
+      AND p.visibility = 'public'
+  ),
+  mutual_counts AS (
+    SELECT 
+      cp.id,
+      COUNT(f.id) AS mutual_count
+    FROM candidate_profiles cp
+    LEFT JOIN public.friendships f ON (
+      f.status = 'accepted' AND (
+        (f.requester_id = cp.id AND f.addressee_id IN (SELECT friend_id FROM user_friends))
+        OR
+        (f.addressee_id = cp.id AND f.requester_id IN (SELECT friend_id FROM user_friends))
+      )
+    )
+    GROUP BY cp.id
+  )
+  SELECT 
+    cp.id,
+    cp.username,
+    cp.display_name,
+    cp.full_name,
+    cp.avatar_url,
+    cp.bio,
+    cp.cover_image_url,
+    COALESCE(mc.mutual_count, 0) AS mutual_count
+  FROM candidate_profiles cp
+  JOIN mutual_counts mc ON mc.id = cp.id
+  ORDER BY mc.mutual_count DESC, cp.username ASC
+  LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '';
 
 -- Grants
 GRANT EXECUTE ON FUNCTION public.is_connected_to_user(uuid) TO authenticated;
@@ -431,7 +693,12 @@ GRANT EXECUTE ON FUNCTION public.search_users_by_username(text) TO authenticated
 GRANT EXECUTE ON FUNCTION public.get_friend_profiles(uuid[]) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_public_productivity(uuid, int) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.migrate_user_local_data(jsonb) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.delete_user_account() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.delete_user_account(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.are_friends(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_or_create_conversation(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.mark_conversation_read(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.acknowledge_message_delivery(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_suggested_connections(int) TO authenticated;
 
 -- ==========================================
 -- 4. TRIGGERS
@@ -555,6 +822,9 @@ ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_stats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversation_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
 -- Profile visibility-respecting policy
 CREATE POLICY "profiles_select_policy" ON public.profiles 
@@ -622,6 +892,77 @@ CREATE TRIGGER notes_folder_ownership_trigger
 BEFORE INSERT OR UPDATE ON public.notes
 FOR EACH ROW EXECUTE PROCEDURE public.enforce_note_folder_ownership();
 
+-- Conversations RLS
+CREATE POLICY "conversations_select_members" ON public.conversations
+FOR SELECT USING (auth.uid() = user1_id OR auth.uid() = user2_id);
+
+CREATE POLICY "conversations_insert_members" ON public.conversations
+FOR INSERT WITH CHECK (
+  (auth.uid() = user1_id OR auth.uid() = user2_id)
+  AND public.are_friends(user1_id, user2_id)
+  AND user1_id < user2_id
+);
+
+CREATE POLICY "conversations_update_members" ON public.conversations
+FOR UPDATE USING (auth.uid() = user1_id OR auth.uid() = user2_id);
+
+-- Conversation Members RLS
+CREATE POLICY "conversation_members_select" ON public.conversation_members
+FOR SELECT USING (
+  user_id = auth.uid() OR
+  EXISTS (
+    SELECT 1 FROM public.conversations c
+    WHERE c.id = conversation_members.conversation_id
+      AND (c.user1_id = auth.uid() OR c.user2_id = auth.uid())
+  )
+);
+
+CREATE POLICY "conversation_members_update_own" ON public.conversation_members
+FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- Messages RLS
+CREATE POLICY "messages_select_members" ON public.messages
+FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.conversations c
+    WHERE c.id = messages.conversation_id
+      AND (c.user1_id = auth.uid() OR c.user2_id = auth.uid())
+  )
+);
+
+CREATE POLICY "messages_insert_authorized_sender" ON public.messages
+FOR INSERT WITH CHECK (
+  auth.uid() = sender_id
+  AND EXISTS (
+    SELECT 1 FROM public.conversations c
+    WHERE c.id = messages.conversation_id
+      AND (c.user1_id = auth.uid() OR c.user2_id = auth.uid())
+      AND public.are_friends(c.user1_id, c.user2_id)
+  )
+);
+
+-- Message Activity & Read Trigger
+CREATE OR REPLACE FUNCTION public.handle_new_message()
+RETURNS trigger AS $$
+BEGIN
+  UPDATE public.conversations
+  SET last_message_at = NEW.created_at,
+      updated_at = NEW.created_at
+  WHERE id = NEW.conversation_id;
+
+  UPDATE public.conversation_members
+  SET last_read_at = NEW.created_at
+  WHERE conversation_id = NEW.conversation_id AND user_id = NEW.sender_id;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+DROP TRIGGER IF EXISTS trigger_on_new_message ON public.messages;
+CREATE TRIGGER trigger_on_new_message
+AFTER INSERT ON public.messages
+FOR EACH ROW EXECUTE PROCEDURE public.handle_new_message();
+
 -- ==========================================
 -- 6. INDEXES
 -- ==========================================
@@ -641,16 +982,20 @@ CREATE INDEX IF NOT EXISTS profiles_username_trgm_idx ON public.profiles USING g
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types) 
 VALUES 
   ('profile-images', 'profile-images', true, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
-  ('profile-covers', 'profile-covers', true, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+  ('profile-covers', 'profile-covers', true, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+  ('message-images', 'message-images', false, 500000, ARRAY['image/jpeg', 'image/png', 'image/webp'])
 ON CONFLICT (id) DO UPDATE 
-SET file_size_limit = 5242880,
-    allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+SET file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
 
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'objects') THEN
     DROP POLICY IF EXISTS "Users can upload their own avatars and covers" ON storage.objects;
     DROP POLICY IF EXISTS "Users can update their own avatars and covers" ON storage.objects;
     DROP POLICY IF EXISTS "Users can delete their own avatars and covers" ON storage.objects;
+    DROP POLICY IF EXISTS "message_images_select_members" ON storage.objects;
+    DROP POLICY IF EXISTS "message_images_insert_members" ON storage.objects;
+    DROP POLICY IF EXISTS "message_images_delete_members" ON storage.objects;
     
     CREATE POLICY "Users can upload their own avatars and covers" ON storage.objects
     FOR INSERT WITH CHECK (
@@ -681,6 +1026,65 @@ DO $$ BEGIN
         name LIKE (auth.uid()::text || '-%')
       )
     );
+
+    CREATE POLICY "message_images_select_members" ON storage.objects
+    FOR SELECT TO authenticated USING (
+      bucket_id = 'message-images' AND
+      EXISTS (
+        SELECT 1 FROM public.conversations c
+        WHERE c.id::text = (storage.foldername(name))[1]
+          AND (c.user1_id = auth.uid() OR c.user2_id = auth.uid())
+      )
+    );
+
+    CREATE POLICY "message_images_insert_members" ON storage.objects
+    FOR INSERT TO authenticated WITH CHECK (
+      bucket_id = 'message-images' AND
+      EXISTS (
+        SELECT 1 FROM public.conversations c
+        WHERE c.id::text = (storage.foldername(name))[1]
+          AND (c.user1_id = auth.uid() OR c.user2_id = auth.uid())
+          AND public.are_friends(c.user1_id, c.user2_id)
+      )
+    );
+
+    CREATE POLICY "message_images_delete_members" ON storage.objects
+    FOR DELETE TO authenticated USING (
+      bucket_id = 'message-images' AND
+      (
+        auth.uid() = owner OR
+        EXISTS (
+          SELECT 1 FROM public.conversations c
+          WHERE c.id::text = (storage.foldername(name))[1]
+            AND (c.user1_id = auth.uid() OR c.user2_id = auth.uid())
+        )
+      )
+    );
+  END IF;
+END $$;
+
+-- Realtime Publication for Direct Messaging
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'conversations'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'conversation_members'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE conversation_members;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE messages;
   END IF;
 END $$;
 
@@ -701,14 +1105,15 @@ BEGIN
       v_uname := v_uname || '_' || SUBSTRING(REPLACE(u.id::text, '-', ''), 1, 6);
     END IF;
 
-    INSERT INTO public.profiles (id, username, display_name, full_name, visibility, activity_visibility)
+    INSERT INTO public.profiles (id, username, display_name, full_name, visibility, activity_visibility, timezone)
     VALUES (
       u.id, 
       v_uname, 
       COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', 'User'),
       COALESCE(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name', 'User'),
       'public',
-      'public'
+      'public',
+      'UTC'
     ) ON CONFLICT (id) DO NOTHING;
 
     INSERT INTO public.user_preferences (user_id) VALUES (u.id) ON CONFLICT (user_id) DO NOTHING;
@@ -716,12 +1121,54 @@ BEGIN
   END LOOP;
 END $$;
 
--- Dynamic User Streak Calculation
+-- Dynamic Timezone-Aware User Streak Calculation
 CREATE OR REPLACE FUNCTION public.calculate_user_streak(target_user_id uuid)
-RETURNS int AS $$
+RETURNS int
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = extensions, public, pg_temp
+AS $$
 DECLARE
+  v_caller_id uuid := auth.uid();
   v_streak int := 0;
+  v_user_tz text;
+  v_today date;
 BEGIN
+  IF v_caller_id IS NULL OR target_user_id IS NULL THEN
+    RETURN 0;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = target_user_id
+  ) THEN
+    RETURN 0;
+  END IF;
+
+  IF v_caller_id != target_user_id AND NOT EXISTS (
+    SELECT 1
+    FROM public.friendships f
+    WHERE f.status = 'accepted'
+      AND (
+        (f.requester_id = v_caller_id AND f.addressee_id = target_user_id)
+        OR (f.addressee_id = v_caller_id AND f.requester_id = target_user_id)
+      )
+  ) THEN
+    RETURN 0;
+  END IF;
+
+  SELECT COALESCE(NULLIF(p.timezone, ''), 'UTC') INTO v_user_tz
+  FROM public.profiles p
+  WHERE p.id = target_user_id;
+
+  BEGIN
+    v_today := (timezone(v_user_tz, now()))::date;
+  EXCEPTION WHEN OTHERS THEN
+    v_today := (timezone('UTC', now()))::date;
+  END;
+
   WITH user_active_dates AS (
     SELECT DISTINCT completed_date AS active_date
     FROM public.task_completions
@@ -730,6 +1177,14 @@ BEGIN
     SELECT DISTINCT date AS active_date
     FROM public.daily_data
     WHERE user_id = target_user_id AND manual_completion = true
+    UNION
+    SELECT (generate_series(
+      (streak_credit_date - (streak_credit_value - 1))::timestamp, 
+      streak_credit_date::timestamp, 
+      '1 day'::interval
+    ))::date AS active_date
+    FROM public.user_stats
+    WHERE user_id = target_user_id AND streak_credit_value > 0 AND streak_credit_date IS NOT NULL
   ),
   ordered_dates AS (
     SELECT 
@@ -748,15 +1203,16 @@ BEGIN
   SELECT streak_length
   INTO v_streak
   FROM streaks
-  WHERE streak_end >= CURRENT_DATE - 1
+  WHERE streak_end >= v_today - 1
   ORDER BY streak_end DESC
   LIMIT 1;
 
   RETURN COALESCE(v_streak, 0);
 END;
-$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '';
+$$;
 
 REVOKE ALL ON FUNCTION public.calculate_user_streak(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.calculate_user_streak(uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.calculate_user_streak(uuid) TO authenticated;
 
 -- Completion Streak Sync Trigger
@@ -807,4 +1263,5 @@ CREATE TRIGGER trigger_sync_user_streak_daily
 AFTER INSERT OR UPDATE OR DELETE ON public.daily_data
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_user_streak_on_completion();
+
 

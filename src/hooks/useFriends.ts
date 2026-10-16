@@ -201,7 +201,7 @@ export function useFriends() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile]);
+  }, [user]);
 
   useEffect(() => {
     fetchFriendships();
@@ -233,7 +233,7 @@ export function useFriends() {
       }
       toast.success('Friend request sent');
       fetchFriendships();
-    } catch (err: any) {
+    } catch {
       toast.error('Could not send friend request');
     }
   };
@@ -248,7 +248,7 @@ export function useFriends() {
       if (error) throw error;
       toast.success('Friend request accepted');
       fetchFriendships();
-    } catch (err: any) {
+    } catch {
       toast.error('Failed to accept friend request');
     }
   };
@@ -263,7 +263,7 @@ export function useFriends() {
       if (error) throw error;
       toast.success('Friend request declined');
       fetchFriendships();
-    } catch (err: any) {
+    } catch {
       toast.error('Failed to decline friend request');
     }
   };
@@ -284,7 +284,7 @@ export function useFriends() {
       }
       toast.success('Friend request cancelled');
       fetchFriendships();
-    } catch (err: any) {
+    } catch {
       toast.error('Failed to cancel friend request');
     }
   };

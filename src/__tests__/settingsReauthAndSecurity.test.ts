@@ -200,7 +200,7 @@ describe('Settings Reauthentication & Security Redesign', () => {
     });
 
     it('executes storage pre-cleanup and backend authoritative delete_user_account RPC without client user ID injection', () => {
-      expect(settingsPageRaw).toMatch(/supabase\s*\.rpc\('delete_user_account'\)/);
+      expect(settingsPageRaw).toMatch(/supabase\s*\.rpc\('delete_user_account'[,)]/);
       expect(settingsPageRaw).toMatch(/supabase\s*\.storage\s*\.from\('message-images'\)/);
     });
   });
