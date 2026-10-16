@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, ChevronDown, Clock, Plus, Repeat } from 'lucide-react';
 import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, parseISO } from 'date-fns';
@@ -334,7 +334,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
     }
   };
 
-  const SelectedIcon = getTaskIcon(icon);
+  const TaskIconComponent = useMemo(() => getTaskIcon(icon), [icon]);
 
   return (
     <>
@@ -374,7 +374,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                 className="w-12 h-12 shrink-0 rounded-2xl border border-border/60 bg-surface hover:bg-white/5 hover:border-textMuted/60 transition-all flex items-center justify-center group text-textMuted hover:text-textMain shadow-inner mt-0.5"
                 title="Choose Icon"
               >
-                {SelectedIcon ? <SelectedIcon size={22} className="text-textMain group-hover:scale-110 transition-transform" /> : <Plus size={20} />}
+                {TaskIconComponent ? <TaskIconComponent size={22} className="text-textMain group-hover:scale-110 transition-transform" /> : <Plus size={20} />}
               </button>
               <div className="flex-1 min-w-0 flex flex-col gap-1">
                 <input

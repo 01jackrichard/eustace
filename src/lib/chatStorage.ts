@@ -59,13 +59,19 @@ export async function uploadMessageImage(
   file: File,
   metadata?: Record<string, any>
 ): Promise<{ imagePath: string; metadata: Record<string, any> }> {
-  if (file.size > 500_000) {
-    throw new Error('Image exceeds the hard limit of 500,000 bytes (500 KB).');
+  const allowedMimes: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp'
+  };
+
+  const safeExt = allowedMimes[file.type.toLowerCase()];
+  if (!safeExt) {
+    throw new Error('Unsupported image format. Only JPEG, PNG, and WebP images are allowed.');
   }
 
-  const ext = file.name.split('.').pop() || 'webp';
   const randomSuffix = Math.random().toString(36).substring(2, 10);
-  const fileName = `${Date.now()}_${randomSuffix}.${ext}`;
+  const fileName = `${Date.now()}_${randomSuffix}.${safeExt}`;
   const imagePath = `${conversationId}/${fileName}`;
 
   const { data, error } = await supabase.storage

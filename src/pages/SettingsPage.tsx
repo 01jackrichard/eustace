@@ -34,7 +34,7 @@ export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeTab = searchParams.get('section') || 'account';
-  const setActiveTab = (tab: string) => setSearchParams({ section: tab });
+  const setActiveTab = useCallback((tab: string) => setSearchParams({ section: tab }), [setSearchParams]);
 
   // Security Verification Hook & State
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
@@ -72,7 +72,7 @@ export function SettingsPage() {
       setActiveTab('account');
       setIsVerifyModalOpen(true);
     }
-  }, [activeTab, isVerified]);
+  }, [activeTab, isVerified, setActiveTab]);
 
   // Notifications State
   const [prefs, setPrefs] = useState({
@@ -344,8 +344,8 @@ export function SettingsPage() {
         console.warn('[STORAGE_CLEANUP] Client storage cleanup warning:', storageErr);
       }
 
-      // 3. Authoritative server-side account deletion cascade
-      const { error } = await supabase.rpc('delete_user_account');
+      // 3. Authoritative server-side account deletion cascade with server-side password verification
+      const { error } = await supabase.rpc('delete_user_account', { p_password: pwd || null });
       if (error) {
         toast.error('Failed to delete account: ' + error.message);
         setIsDeleting(false);

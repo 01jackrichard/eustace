@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
-import { calculateStreakFromDates } from '../lib/streakUtils';
 
 export type Profile = {
   id: string;
@@ -69,20 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       ]);
 
       if (!profileRes.error && profileRes.data) {
-        let currentStreak = typeof statsRes.data === 'number' ? statsRes.data : (statsRes.data?.current_streak ?? 0);
-
-        if (currentStreak === 0) {
-          const { data: completions } = await supabase
-            .from('task_completions')
-            .select('completed_date')
-            .eq('user_id', userId)
-            .order('completed_date', { ascending: false })
-            .limit(30);
-
-          if (completions && completions.length > 0) {
-            currentStreak = calculateStreakFromDates(completions.map(c => c.completed_date));
-          }
-        }
+        const currentStreak = typeof statsRes.data === 'number' ? statsRes.data : (statsRes.data?.current_streak ?? 0);
 
         // Reliably ensure user IANA timezone initialization
         let userTimezone = profileRes.data.timezone;
