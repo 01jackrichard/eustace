@@ -28,6 +28,7 @@ import { supabase } from '../lib/supabase';
 import { verifyCurrentPassword } from '../lib/reauth';
 import { useSecurityVerification } from '../hooks/useSecurityVerification';
 import { useNotifications } from '../hooks/useNotifications';
+import { notificationService } from '../services/notificationService';
 import { VerifyIdentityModal } from '../components/settings/VerifyIdentityModal';
 import { DeleteAccountModal } from '../components/settings/DeleteAccountModal';
 
