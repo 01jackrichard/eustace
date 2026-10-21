@@ -46,6 +46,7 @@ export default defineConfig({
         start_url: '/',
       },
       workbox: {
+        importScripts: ['/firebase-messaging-sw.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,jpg,webp}'],
         // Defer the Landing-page decorative hero image (hero-hands-new.webp) to runtime caching.
         globIgnores: ['**/hero-hands-new.webp', '**/hero-hands-hd.png', '**/hero-hands-new.png'],

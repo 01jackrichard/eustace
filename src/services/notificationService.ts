@@ -89,9 +89,17 @@ export const notificationService = {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return null;
 
     try {
-      let reg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+      // Prefer ready PWA service worker (which bundles /firebase-messaging-sw.js)
+      try {
+        const readyReg = await navigator.serviceWorker.ready;
+        if (readyReg) return readyReg;
+      } catch {
+        // Fallback to query
+      }
+
+      let reg = await navigator.serviceWorker.getRegistration();
       if (!reg) {
-        reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+        reg = await navigator.serviceWorker.register('/sw.js', {
           scope: '/'
         });
       }

@@ -9,11 +9,13 @@ import { supabase } from '../lib/supabase';
 import { Loader2, PanelLeft } from 'lucide-react';
 import { useDebounce } from '../hooks/useDebounce';
 import { cn } from '../lib/utils';
+import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'motion/react';
 
 export function ProtectedLayout() {
   const { user, profile, loading, refreshProfile } = useAuth();
   const location = useLocation();
+  useNotifications();
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('eustace_sidebar_state');
