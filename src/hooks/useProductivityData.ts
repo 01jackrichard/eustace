@@ -53,6 +53,11 @@ export function useProductivityData(year: number) {
           meta.startTime = rawStartTime;
         }
 
+        const rawReminder = typeof t.reminder_minutes === 'number' ? t.reminder_minutes : (typeof meta.reminderMinutes === 'number' ? meta.reminderMinutes : null);
+        if (rawReminder !== null) {
+          meta.reminderMinutes = rawReminder;
+        }
+
         const task: Task = {
           id: t.id,
           name: t.name,
@@ -62,7 +67,8 @@ export function useProductivityData(year: number) {
           createdAt: t.created_at.split('T')[0],
           description: t.description,
           metadata: meta,
-          startTime: rawStartTime
+          startTime: rawStartTime,
+          reminderMinutes: rawReminder
         };
 
         if (t.recurring !== 'none') {
@@ -119,7 +125,8 @@ export function useProductivityData(year: number) {
       recurring: taskData.recurring,
       created_at: taskData.createdAt,
       description: taskData.description,
-      start_time: rawStartTime
+      start_time: rawStartTime,
+      reminder_minutes: taskData.metadata?.reminderMinutes ?? taskData.reminderMinutes ?? null
     };
 
     let { data: inserted, error } = await supabase
@@ -127,6 +134,14 @@ export function useProductivityData(year: number) {
       .insert(insertPayload)
       .select()
       .single();
+
+    // Backward-compatibility fallback if reminder_minutes column is not yet deployed
+    if (error && (error.code === 'PGRST204' || error.message?.includes('reminder_minutes'))) {
+      delete insertPayload.reminder_minutes;
+      const retry = await supabase.from('tasks').insert(insertPayload).select().single();
+      inserted = retry.data;
+      error = retry.error;
+    }
 
     // Backward-compatibility fallback if start_time column is not yet deployed to live schema
     if (error && (error.code === 'PGRST204' || error.message?.includes('start_time'))) {
@@ -221,7 +236,8 @@ export function useProductivityData(year: number) {
       duration: task.duration,
       recurring: task.recurring,
       description: task.description,
-      start_time: rawStartTime
+      start_time: rawStartTime,
+      reminder_minutes: task.metadata?.reminderMinutes ?? task.reminderMinutes ?? null
     };
 
     let { data: updated, error } = await supabase
@@ -230,6 +246,13 @@ export function useProductivityData(year: number) {
       .match({ id: task.id, user_id: user.id })
       .select()
       .single();
+
+    if (error && (error.code === 'PGRST204' || error.message?.includes('reminder_minutes'))) {
+      delete updatePayload.reminder_minutes;
+      const retry = await supabase.from('tasks').update(updatePayload).match({ id: task.id, user_id: user.id }).select().single();
+      updated = retry.data;
+      error = retry.error;
+    }
 
     if (error && (error.code === 'PGRST204' || error.message?.includes('start_time'))) {
       delete updatePayload.start_time;

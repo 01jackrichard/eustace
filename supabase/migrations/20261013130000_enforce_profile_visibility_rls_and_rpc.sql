@@ -51,6 +51,7 @@ USING (
 );
 
 -- 2. Enforce profile visibility in public.get_profile_by_username(target_username text)
+DROP FUNCTION IF EXISTS public.get_profile_by_username(text);
 CREATE OR REPLACE FUNCTION public.get_profile_by_username(target_username text)
 RETURNS TABLE (
   id uuid,

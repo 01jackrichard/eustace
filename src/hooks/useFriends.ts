@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { notificationService } from '../services/notificationService';
 import toast from 'react-hot-toast';
 
 export type Profile = {
@@ -232,6 +233,16 @@ export function useFriends() {
         if (updateError) throw error;
       }
       toast.success('Friend request sent');
+      if (user) {
+        const senderName = user.user_metadata?.display_name || user.user_metadata?.full_name || 'Someone';
+        notificationService.sendNotificationTrigger({
+          recipientUserId: targetUserId,
+          type: 'friend_request',
+          title: '👥 Friend request',
+          body: `${senderName} sent you a friend request.`,
+          url: '/friends'
+        }).catch(() => {});
+      }
       fetchFriendships();
     } catch {
       toast.error('Could not send friend request');
@@ -247,6 +258,18 @@ export function useFriends() {
 
       if (error) throw error;
       toast.success('Friend request accepted');
+      const acceptedFriendship = friendships.find((f) => f.id === friendshipId);
+      if (user && acceptedFriendship) {
+        const recipientId = acceptedFriendship.requester_id === user.id ? acceptedFriendship.addressee_id : acceptedFriendship.requester_id;
+        const senderName = user.user_metadata?.display_name || user.user_metadata?.full_name || 'A friend';
+        notificationService.sendNotificationTrigger({
+          recipientUserId: recipientId,
+          type: 'friend_accepted',
+          title: '👥 Friendship',
+          body: `${senderName} accepted your friend request.`,
+          url: '/friends'
+        }).catch(() => {});
+      }
       fetchFriendships();
     } catch {
       toast.error('Failed to accept friend request');

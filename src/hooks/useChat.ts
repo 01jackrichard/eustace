@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { uploadMessageImage, cleanupOrphanedMessageImage, getSignedMessageImageUrl } from '../lib/chatStorage';
+import { notificationService } from '../services/notificationService';
 import type { Profile } from './useFriends';
 
 export interface ChatMessage {
@@ -458,6 +459,18 @@ export function useChat(conversationId: string | null, friendProfile?: Profile |
           m.id === tempId ? { ...m, id: insertedRow.id, created_at: insertedRow.created_at, status: 'sent' } : m
         )
       );
+
+      if (friendProfile?.id) {
+        const senderName = user.user_metadata?.display_name || user.user_metadata?.full_name || 'A friend';
+        notificationService.sendNotificationTrigger({
+          recipientUserId: friendProfile.id,
+          type: 'message',
+          title: '💬 New message',
+          body: `${senderName} sent you a message.`,
+          url: `/chat/${conversationId}`,
+          data: { conversation_id: conversationId }
+        }).catch(() => {});
+      }
     } catch (err: any) {
       console.error('Failed to send text message:', err);
       setMessages((prev) =>

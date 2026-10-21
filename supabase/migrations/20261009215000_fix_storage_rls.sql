@@ -10,8 +10,8 @@ DO $block$ BEGIN
     FOR INSERT WITH CHECK (
       bucket_id IN ('profile-images', 'profile-covers') AND
       (
-        auth.uid() = owner_id OR
-        auth.uid() = owner OR
+        auth.uid()::text = owner_id OR
+        auth.uid()::text = owner::text OR
         (storage.foldername(name))[1] = auth.uid()::text OR
         name LIKE (auth.uid()::text || '-%')
       )
@@ -21,8 +21,8 @@ DO $block$ BEGIN
     FOR UPDATE USING (
       bucket_id IN ('profile-images', 'profile-covers') AND
       (
-        auth.uid() = owner_id OR
-        auth.uid() = owner OR
+        auth.uid()::text = owner_id OR
+        auth.uid()::text = owner::text OR
         (storage.foldername(name))[1] = auth.uid()::text OR
         name LIKE (auth.uid()::text || '-%')
       )
@@ -32,8 +32,8 @@ DO $block$ BEGIN
     FOR DELETE USING (
       bucket_id IN ('profile-images', 'profile-covers') AND
       (
-        auth.uid() = owner_id OR
-        auth.uid() = owner OR
+        auth.uid()::text = owner_id OR
+        auth.uid()::text = owner::text OR
         (storage.foldername(name))[1] = auth.uid()::text OR
         name LIKE (auth.uid()::text || '-%')
       )

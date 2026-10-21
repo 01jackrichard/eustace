@@ -101,6 +101,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     try {
+      try {
+        const { notificationService } = await import('../services/notificationService');
+        if (user) await notificationService.unregisterDevice(user.id);
+      } catch {}
       const { DataManager } = await import('../lib/dataManager');
       DataManager.clearData();
       sessionStorage.clear();

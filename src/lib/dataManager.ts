@@ -17,6 +17,7 @@ export type TaskMetadata = {
   endTime?: string; // HH:mm format
   icon?: string;
   iconColor?: string;
+  reminderMinutes?: number | null;
 };
 
 export type Task = {
@@ -29,6 +30,7 @@ export type Task = {
   description?: string; // serialized JSON of TaskMetadata
   metadata?: TaskMetadata;
   startTime?: string;
+  reminderMinutes?: number | null;
 };
 
 export const parseTaskMetadata = (task: Task): TaskMetadata => {

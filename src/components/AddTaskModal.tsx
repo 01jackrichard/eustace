@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, ChevronDown, Clock, Plus, Repeat } from 'lucide-react';
+import { X, Check, ChevronDown, Clock, Plus, Repeat, Bell } from 'lucide-react';
 import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, parseISO } from 'date-fns';
 import { getTaskIcon } from '../lib/iconRegistry';
 import type { Task, TaskMetadata } from '../lib/dataManager';
@@ -34,6 +34,16 @@ export const RECURRENCE_OPTIONS: Array<{ value: Task['recurring']; label: string
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
   { value: 'yearly', label: 'Yearly' },
+];
+
+export const REMINDER_OPTIONS: Array<{ value: number | null; label: string }> = [
+  { value: null, label: 'None' },
+  { value: 0, label: 'At time' },
+  { value: 5, label: '5m before' },
+  { value: 10, label: '10m before' },
+  { value: 15, label: '15m before' },
+  { value: 30, label: '30m before' },
+  { value: 60, label: '1h before' },
 ];
 
 export function getRecurrenceDescription(recurring: Task['recurring'], dateStr: string): string {
@@ -251,6 +261,10 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
   // Recurrence state: ONCE ('none') vs DAILY ('daily')
   // Preserve existing recurring value for legacy tasks (e.g. 'weekly', 'monthly', 'yearly', 'custom')
   const [recurring, setRecurring] = useState<Task['recurring']>(initialTask?.recurring || 'none');
+  const initialReminderCandidate = typeof initialTask?.reminderMinutes === 'number'
+    ? initialTask.reminderMinutes
+    : (typeof meta.reminderMinutes === 'number' ? meta.reminderMinutes : null);
+  const [reminderMinutes, setReminderMinutes] = useState<number | null>(initialReminderCandidate);
   
   const [notes, setNotes] = useState(meta.notes || '');
   const [endDate, setEndDate] = useState(meta.endDate || '');
@@ -295,6 +309,7 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
     if (!name.trim()) return;
 
     const chosenStartTime = timeMode === 'set' && startTime ? startTime : undefined;
+    const chosenReminder = timeMode === 'set' && chosenStartTime ? reminderMinutes : null;
 
     const metadata: TaskMetadata = {
       ...meta,
@@ -302,11 +317,16 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
       startDate: taskDateStr,
       endDate: recurring !== 'none' && endDate ? endDate : undefined,
       startTime: chosenStartTime,
+      reminderMinutes: chosenReminder !== null ? chosenReminder : undefined,
       icon: icon || undefined
     };
 
     if (!chosenStartTime) {
       delete metadata.startTime;
+      delete metadata.reminderMinutes;
+    }
+    if (chosenReminder === null || chosenReminder === undefined) {
+      delete metadata.reminderMinutes;
     }
 
     if ('priority' in metadata) delete metadata.priority;
@@ -329,7 +349,8 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
         createdAt: taskDateStr,
         description: serializeTaskMetadata(metadata),
         metadata,
-        startTime: chosenStartTime
+        startTime: chosenStartTime,
+        reminderMinutes: chosenReminder
       });
     }
   };
@@ -488,6 +509,35 @@ export function AddTaskModal({ date, initialTask, initialStartTime, onClose, onA
                       />
                     </div>
                   )}
+
+                  {/* Reminder Offset Selector */}
+                  <div className="pt-2.5 mt-2 border-t border-border/30 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-bold tracking-[0.15em] text-textMuted uppercase">
+                      <span className="flex items-center gap-1.5"><Bell size={11} className="text-accent" /> Reminder Notification</span>
+                      {reminderMinutes !== null && (
+                        <span className="text-accent normal-case tracking-normal font-semibold">
+                          {REMINDER_OPTIONS.find(o => o.value === reminderMinutes)?.label || 'Custom'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-7 gap-1 p-1 bg-background/60 border border-border/40 rounded-xl">
+                      {REMINDER_OPTIONS.map((opt) => (
+                        <button
+                          key={String(opt.value)}
+                          type="button"
+                          onClick={() => setReminderMinutes(opt.value)}
+                          className={cn(
+                            "py-1.5 text-[10px] font-bold rounded-lg transition-all duration-150 text-center select-none",
+                            reminderMinutes === opt.value
+                              ? "bg-accent text-white shadow-sm font-black"
+                              : "text-textMuted hover:text-textMain hover:bg-white/[0.04]"
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

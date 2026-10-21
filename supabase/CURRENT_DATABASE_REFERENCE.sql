@@ -33,6 +33,11 @@ CREATE TABLE public.user_preferences (
   email_notifications boolean DEFAULT false,
   friend_request_notifications boolean DEFAULT true,
   productivity_reminders boolean DEFAULT true,
+  push_notifications boolean DEFAULT true,
+  task_reminders boolean DEFAULT true,
+  message_notifications boolean DEFAULT true,
+  streak_reminders boolean DEFAULT true,
+  system_notifications boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -68,6 +73,7 @@ CREATE TABLE public.tasks (
   duration text,
   recurring text DEFAULT 'none' CHECK (recurring IN ('none', 'daily', 'weekdays', 'weekly', 'monthly', 'yearly', 'custom')),
   start_time time without time zone DEFAULT NULL,
+  reminder_minutes integer DEFAULT NULL CHECK (reminder_minutes IS NULL OR reminder_minutes IN (0, 5, 10, 15, 30, 60)),
   created_at date NOT NULL DEFAULT current_date,
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -152,6 +158,42 @@ CREATE INDEX idx_conversations_last_msg ON public.conversations(last_message_at 
 CREATE INDEX idx_conversation_members_user ON public.conversation_members(user_id);
 CREATE INDEX idx_messages_conversation_created ON public.messages(conversation_id, created_at DESC);
 CREATE INDEX idx_messages_sender ON public.messages(sender_id);
+
+-- NOTIFICATION SYSTEM
+CREATE TABLE public.notification_devices (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  fcm_token text NOT NULL,
+  token_type text DEFAULT 'fid' CHECK (token_type IN ('fid', 'token')),
+  device_type text DEFAULT 'web' CHECK (device_type IN ('web', 'mobile', 'tablet', 'desktop')),
+  device_name text,
+  is_active boolean DEFAULT true NOT NULL,
+  last_seen_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  CONSTRAINT notification_devices_user_fcm_token_unique UNIQUE (user_id, fcm_token)
+);
+
+CREATE TABLE public.notifications (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  type text NOT NULL CHECK (type IN ('task_reminder', 'message', 'friend_request', 'friend_accepted', 'streak', 'system')),
+  title text NOT NULL,
+  body text NOT NULL,
+  data jsonb DEFAULT '{}'::jsonb NOT NULL,
+  read_at timestamp with time zone DEFAULT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE public.task_reminder_logs (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  task_id uuid REFERENCES public.tasks(id) ON DELETE CASCADE NOT NULL,
+  occurrence_date date NOT NULL,
+  reminder_minutes integer NOT NULL,
+  sent_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  CONSTRAINT task_reminder_logs_unique UNIQUE (user_id, task_id, occurrence_date, reminder_minutes)
+);
 
 -- ==========================================
 -- 3. FUNCTIONS & RPCs
@@ -1265,3 +1307,177 @@ FOR EACH ROW
 EXECUTE FUNCTION public.sync_user_streak_on_completion();
 
 
+
+
+-- NOTIFICATION SYSTEM POLICIES & FUNCTIONS
+ALTER TABLE public.notification_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_reminder_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY notification_devices_select_policy ON public.notification_devices
+  FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()));
+CREATE POLICY notification_devices_insert_policy ON public.notification_devices
+  FOR INSERT TO authenticated WITH CHECK (user_id = (SELECT auth.uid()));
+CREATE POLICY notification_devices_update_policy ON public.notification_devices
+  FOR UPDATE TO authenticated USING (user_id = (SELECT auth.uid())) WITH CHECK (user_id = (SELECT auth.uid()));
+CREATE POLICY notification_devices_delete_policy ON public.notification_devices
+  FOR DELETE TO authenticated USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY notifications_select_policy ON public.notifications
+  FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()));
+CREATE POLICY notifications_insert_policy ON public.notifications
+  FOR INSERT TO authenticated WITH CHECK (user_id = (SELECT auth.uid()));
+CREATE POLICY notifications_update_policy ON public.notifications
+  FOR UPDATE TO authenticated USING (user_id = (SELECT auth.uid())) WITH CHECK (user_id = (SELECT auth.uid()));
+CREATE POLICY notifications_delete_policy ON public.notifications
+  FOR DELETE TO authenticated USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY task_reminder_logs_select_policy ON public.task_reminder_logs
+  FOR SELECT TO authenticated USING (user_id = (SELECT auth.uid()));
+
+CREATE OR REPLACE FUNCTION public.register_notification_device(
+  p_fcm_token text,
+  p_device_type text DEFAULT 'web',
+  p_device_name text DEFAULT NULL,
+  p_token_type text DEFAULT 'fid'
+)
+RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_user_id uuid;
+  v_device_id uuid;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated caller cannot register notification device';
+  END IF;
+  IF p_fcm_token IS NULL OR trim(p_fcm_token) = '' THEN
+    RAISE EXCEPTION 'FCM registration token cannot be empty';
+  END IF;
+  INSERT INTO public.notification_devices (user_id, fcm_token, token_type, device_type, device_name, is_active, last_seen_at, updated_at)
+  VALUES (v_user_id, trim(p_fcm_token), COALESCE(p_token_type, 'fid'), COALESCE(p_device_type, 'web'), p_device_name, true, timezone('utc'::text, now()), timezone('utc'::text, now()))
+  ON CONFLICT (user_id, fcm_token) DO UPDATE
+  SET is_active = true,
+      token_type = COALESCE(EXCLUDED.token_type, public.notification_devices.token_type),
+      device_type = COALESCE(EXCLUDED.device_type, public.notification_devices.device_type),
+      device_name = COALESCE(EXCLUDED.device_name, public.notification_devices.device_name),
+      last_seen_at = timezone('utc'::text, now()),
+      updated_at = timezone('utc'::text, now())
+  RETURNING id INTO v_device_id;
+  RETURN v_device_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.unregister_notification_device(p_fcm_token text)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_user_id uuid;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Unauthenticated caller cannot unregister notification device';
+  END IF;
+  UPDATE public.notification_devices
+  SET is_active = false, updated_at = timezone('utc'::text, now())
+  WHERE user_id = v_user_id AND fcm_token = trim(p_fcm_token);
+  RETURN true;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION public.get_due_task_reminders(p_window_minutes integer DEFAULT 5)
+RETURNS TABLE (
+  task_id uuid,
+  user_id uuid,
+  task_name text,
+  occurrence_date date,
+  start_time time without time zone,
+  reminder_minutes integer,
+  user_timezone text,
+  fcm_tokens text[],
+  devices jsonb
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH eligible_tasks AS (
+    SELECT 
+      t.id AS task_id,
+      t.user_id,
+      t.name AS task_name,
+      t.recurring,
+      t.start_time,
+      t.reminder_minutes,
+      t.created_at AS task_created_date,
+      COALESCE(NULLIF(p.timezone, ''), 'UTC') AS user_timezone
+    FROM public.tasks t
+    JOIN public.profiles p ON p.id = t.user_id
+    LEFT JOIN public.user_preferences up ON up.user_id = t.user_id
+    WHERE t.reminder_minutes IS NOT NULL
+      AND t.start_time IS NOT NULL
+      AND (up.push_notifications IS NULL OR up.push_notifications = true)
+      AND (up.task_reminders IS NULL OR up.task_reminders = true)
+  ),
+  active_user_tokens AS (
+    SELECT 
+      nd.user_id,
+      array_agg(DISTINCT nd.fcm_token) AS tokens,
+      jsonb_agg(jsonb_build_object('token', nd.fcm_token, 'type', nd.token_type)) AS devices
+    FROM public.notification_devices nd
+    WHERE nd.is_active = true
+    GROUP BY nd.user_id
+  ),
+  candidate_occurrences AS (
+    SELECT 
+      et.task_id,
+      et.user_id,
+      et.task_name,
+      (now() AT TIME ZONE et.user_timezone)::date AS current_user_date,
+      et.start_time,
+      et.reminder_minutes,
+      et.user_timezone,
+      ((((now() AT TIME ZONE et.user_timezone)::date || ' ' || et.start_time)::timestamp AT TIME ZONE et.user_timezone)
+        - (et.reminder_minutes || ' minutes')::interval) AS reminder_time_utc,
+      aut.tokens,
+      aut.devices
+    FROM eligible_tasks et
+    JOIN active_user_tokens aut ON aut.user_id = et.user_id
+    WHERE 
+      (et.recurring != 'none' OR et.task_created_date = (now() AT TIME ZONE et.user_timezone)::date)
+  )
+  SELECT 
+    co.task_id,
+    co.user_id,
+    co.task_name,
+    co.current_user_date AS occurrence_date,
+    co.start_time,
+    co.reminder_minutes,
+    co.user_timezone,
+    co.tokens AS fcm_tokens,
+    co.devices
+  FROM candidate_occurrences co
+  WHERE co.reminder_time_utc BETWEEN (now() - (p_window_minutes || ' minutes')::interval) AND (now() + INTERVAL '1 minute')
+    AND NOT EXISTS (
+      SELECT 1 FROM public.task_completions tc
+      WHERE tc.user_id = co.user_id 
+        AND tc.task_id = co.task_id 
+        AND tc.completed_date = co.current_user_date
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.task_reminder_logs trl
+      WHERE trl.user_id = co.user_id
+        AND trl.task_id = co.task_id
+        AND trl.occurrence_date = co.current_user_date
+        AND trl.reminder_minutes = co.reminder_minutes
+    );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_due_task_reminders(integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_due_task_reminders(integer) TO service_role;

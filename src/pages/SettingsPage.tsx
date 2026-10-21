@@ -20,11 +20,14 @@ import {
   Sliders,
   Palette,
   Keyboard,
-  Clock
+  Clock,
+  Bell,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { verifyCurrentPassword } from '../lib/reauth';
 import { useSecurityVerification } from '../hooks/useSecurityVerification';
+import { useNotifications } from '../hooks/useNotifications';
 import { VerifyIdentityModal } from '../components/settings/VerifyIdentityModal';
 import { DeleteAccountModal } from '../components/settings/DeleteAccountModal';
 
@@ -75,9 +78,23 @@ export function SettingsPage() {
   }, [activeTab, isVerified, setActiveTab]);
 
   // Notifications State
+  const {
+    permission,
+    isSupported: notifSupported,
+    isConfigured: notifConfigured,
+    loading: notifLoading,
+    requestPermissionAndEnable,
+    disablePushNotifications
+  } = useNotifications();
+  const [testSending, setTestSending] = useState(false);
   const [prefs, setPrefs] = useState({
-    email_notifications: false,
+    push_notifications: true,
+    task_reminders: true,
+    message_notifications: true,
     friend_request_notifications: true,
+    streak_reminders: true,
+    system_notifications: true,
+    email_notifications: false,
     productivity_reminders: true
   });
   const [prefsLoading, setPrefsLoading] = useState(true);
@@ -167,9 +184,14 @@ export function SettingsPage() {
       const { data } = await supabase.from('user_preferences').select('*').eq('user_id', user.id).single();
       if (data) {
         setPrefs({
-          email_notifications: data.email_notifications,
-          friend_request_notifications: data.friend_request_notifications,
-          productivity_reminders: data.productivity_reminders
+          push_notifications: data.push_notifications ?? true,
+          task_reminders: data.task_reminders ?? true,
+          message_notifications: data.message_notifications ?? true,
+          friend_request_notifications: data.friend_request_notifications ?? true,
+          streak_reminders: data.streak_reminders ?? true,
+          system_notifications: data.system_notifications ?? true,
+          email_notifications: data.email_notifications ?? false,
+          productivity_reminders: data.productivity_reminders ?? true
         });
       } else {
         // Insert defaults
@@ -376,6 +398,7 @@ export function SettingsPage() {
       title: 'GENERAL',
       items: [
         { id: 'account', label: 'Account', icon: User },
+        { id: 'notifications', label: 'Notifications', icon: Bell },
         { id: 'preferences', label: 'Preferences', icon: Sliders },
         { id: 'appearance', label: 'Appearance', icon: Palette },
         { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard }
@@ -583,15 +606,41 @@ export function SettingsPage() {
             </div>
           )}
 
-          {/* TAB 2: PREFERENCES */}
-          {activeTab === 'preferences' && (
+          {/* TAB 2: NOTIFICATIONS & PREFERENCES */}
+          {(activeTab === 'notifications' || activeTab === 'preferences') && (
             <div className="animate-fade-in space-y-8">
-              <div>
-                <h2 className="text-xl font-bold text-textMain tracking-tight">Notification Preferences</h2>
-                <p className="text-xs text-textMuted mt-1">Configure automated updates, friend alerts, and productivity reminders.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-textMain tracking-tight">Notifications</h2>
+                  <p className="text-xs text-textMuted mt-1">Configure push alerts, task reminders, social updates, and progress nudges.</p>
+                </div>
+                {saveState && (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent/10 text-accent self-start sm:self-auto">
+                    {saveState}
+                  </span>
+                )}
               </div>
 
-              <div className="bg-surface border border-border/60 rounded-2xl p-6 divide-y divide-border/20">
+              {/* Permission Denied Warning Box */}
+              {permission === 'denied' && (
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-start gap-3">
+                  <AlertTriangle size={18} className="shrink-0 mt-0.5 text-amber-400" />
+                  <div className="text-xs space-y-1">
+                    <span className="font-bold block text-sm text-amber-200">Push Notifications are Blocked</span>
+                    <p className="text-amber-300/90 leading-relaxed">
+                      Your browser is currently blocking notifications from Eustace. To re-enable alerts:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-0.5 pt-1 text-amber-200/90 font-medium">
+                      <li>Click the tune / padlock icon next to the URL in your address bar.</li>
+                      <li>Find <strong>Notifications</strong> and toggle it to <strong>Allow</strong>.</li>
+                      <li>Refresh this page and toggle Push Notifications back on.</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
+
+              {/* Main Notifications Container */}
+              <div className="bg-surface border border-border/60 rounded-2xl p-6 space-y-8">
                 {prefsLoading ? (
                   <div className="flex items-center gap-3 text-textMuted py-8">
                     <Loader2 size={16} className="animate-spin text-accent" />
@@ -599,75 +648,269 @@ export function SettingsPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 gap-4">
+                    {/* MASTER TOGGLE: Push Notifications */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-border/20 gap-4">
                       <div>
-                        <span className="text-sm font-bold text-textMain block">Email Notifications</span>
-                        <span className="text-xs text-textMuted">Receive system updates and weekly summaries via email.</span>
+                        <span className="text-base font-bold text-textMain block flex items-center gap-2">
+                          <Bell size={18} className="text-accent" /> Push Notifications
+                        </span>
+                        <span className="text-xs text-textMuted mt-0.5 block">
+                          Receive timely notifications on this device even when Eustace is running in the background.
+                        </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => updatePreference('email_notifications', !prefs.email_notifications)}
-                        aria-pressed={prefs.email_notifications}
-                        aria-label="Toggle email notifications"
+                        disabled={notifLoading || !notifSupported}
+                        onClick={async () => {
+                          if (prefs.push_notifications) {
+                            await disablePushNotifications();
+                            updatePreference('push_notifications', false);
+                          } else {
+                            const granted = await requestPermissionAndEnable();
+                            if (granted) {
+                              updatePreference('push_notifications', true);
+                            }
+                          }
+                        }}
+                        aria-pressed={prefs.push_notifications}
+                        aria-label="Toggle push notifications"
                         className={cn(
-                          "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40",
-                          prefs.email_notifications ? "bg-accent" : "bg-border/60"
+                          "w-12 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0",
+                          prefs.push_notifications ? "bg-accent" : "bg-border/60",
+                          (notifLoading || !notifSupported) && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         <div
                           className={cn(
                             "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
-                            prefs.email_notifications ? "right-0.5" : "left-0.5"
+                            prefs.push_notifications ? "right-0.5" : "left-0.5"
                           )}
                         />
                       </button>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between py-6 gap-4">
-                      <div>
-                        <span className="text-sm font-bold text-textMain block">Friend Request Notifications</span>
-                        <span className="text-xs text-textMuted">Get notified in real-time when another user sends you a friend request.</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => updatePreference('friend_request_notifications', !prefs.friend_request_notifications)}
-                        aria-pressed={prefs.friend_request_notifications}
-                        aria-label="Toggle friend request notifications"
-                        className={cn(
-                          "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40",
-                          prefs.friend_request_notifications ? "bg-accent" : "bg-border/60"
-                        )}
-                      >
-                        <div
+                    {/* SECTION 1: Tasks */}
+                    <div className="space-y-4">
+                      <h3 className="text-[11px] font-bold tracking-[0.2em] text-textMuted uppercase">
+                        Tasks
+                      </h3>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-4">
+                        <div>
+                          <span className="text-sm font-bold text-textMain block">Task Reminders</span>
+                          <span className="text-xs text-textMuted">Receive scheduled alerts before your intentional tasks begin.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = !prefs.task_reminders;
+                            updatePreference('task_reminders', next);
+                            updatePreference('productivity_reminders', next);
+                          }}
+                          aria-pressed={prefs.task_reminders}
+                          aria-label="Toggle task reminders"
                           className={cn(
-                            "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
-                            prefs.friend_request_notifications ? "right-0.5" : "left-0.5"
+                            "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0",
+                            prefs.task_reminders ? "bg-accent" : "bg-border/60"
                           )}
-                        />
-                      </button>
+                        >
+                          <div
+                            className={cn(
+                              "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
+                              prefs.task_reminders ? "right-0.5" : "left-0.5"
+                            )}
+                          />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-6 gap-4">
+                    {/* SECTION 2: Social */}
+                    <div className="space-y-4 pt-4 border-t border-border/20">
+                      <h3 className="text-[11px] font-bold tracking-[0.2em] text-textMuted uppercase">
+                        Social
+                      </h3>
+                      <div className="divide-y divide-border/10">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-4">
+                          <div>
+                            <span className="text-sm font-bold text-textMain block">Messages</span>
+                            <span className="text-xs text-textMuted">Alerts when friends send you direct messages.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => updatePreference('message_notifications', !prefs.message_notifications)}
+                            aria-pressed={prefs.message_notifications}
+                            aria-label="Toggle message notifications"
+                            className={cn(
+                              "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0",
+                              prefs.message_notifications ? "bg-accent" : "bg-border/60"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
+                                prefs.message_notifications ? "right-0.5" : "left-0.5"
+                              )}
+                            />
+                          </button>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-4">
+                          <div>
+                            <span className="text-sm font-bold text-textMain block">Friend Requests</span>
+                            <span className="text-xs text-textMuted">Get notified when someone connects with you or accepts your request.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => updatePreference('friend_request_notifications', !prefs.friend_request_notifications)}
+                            aria-pressed={prefs.friend_request_notifications}
+                            aria-label="Toggle friend request notifications"
+                            className={cn(
+                              "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0",
+                              prefs.friend_request_notifications ? "bg-accent" : "bg-border/60"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
+                                prefs.friend_request_notifications ? "right-0.5" : "left-0.5"
+                              )}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SECTION 3: Progress */}
+                    <div className="space-y-4 pt-4 border-t border-border/20">
+                      <h3 className="text-[11px] font-bold tracking-[0.2em] text-textMuted uppercase">
+                        Progress
+                      </h3>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between py-2 gap-4">
+                        <div>
+                          <span className="text-sm font-bold text-textMain block">Streak Reminders</span>
+                          <span className="text-xs text-textMuted">Gentle nudges to log your tasks and preserve your daily productivity streak.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updatePreference('streak_reminders', !prefs.streak_reminders)}
+                          aria-pressed={prefs.streak_reminders}
+                          aria-label="Toggle streak reminders"
+                          className={cn(
+                            "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0",
+                            prefs.streak_reminders ? "bg-accent" : "bg-border/60"
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
+                              prefs.streak_reminders ? "right-0.5" : "left-0.5"
+                            )}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* SECTION 4: System */}
+                    <div className="space-y-4 pt-4 border-t border-border/20">
+                      <h3 className="text-[11px] font-bold tracking-[0.2em] text-textMuted uppercase">
+                        System
+                      </h3>
+                      <div className="divide-y divide-border/10">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-4">
+                          <div>
+                            <span className="text-sm font-bold text-textMain block">Important Updates</span>
+                            <span className="text-xs text-textMuted">Critical account announcements and system notices.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => updatePreference('system_notifications', !prefs.system_notifications)}
+                            aria-pressed={prefs.system_notifications}
+                            aria-label="Toggle important updates"
+                            className={cn(
+                              "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0",
+                              prefs.system_notifications ? "bg-accent" : "bg-border/60"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
+                                prefs.system_notifications ? "right-0.5" : "left-0.5"
+                              )}
+                            />
+                          </button>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-4">
+                          <div>
+                            <span className="text-sm font-bold text-textMain block">Email Notifications</span>
+                            <span className="text-xs text-textMuted">Receive system updates and weekly summaries via email.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => updatePreference('email_notifications', !prefs.email_notifications)}
+                            aria-pressed={prefs.email_notifications}
+                            aria-label="Toggle email notifications"
+                            className={cn(
+                              "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0",
+                              prefs.email_notifications ? "bg-accent" : "bg-border/60"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
+                                prefs.email_notifications ? "right-0.5" : "left-0.5"
+                              )}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SECTION 5: Verification & Diagnostics */}
+                    <div className="pt-6 border-t border-border/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
-                        <span className="text-sm font-bold text-textMain block">Daily Productivity Reminders</span>
-                        <span className="text-xs text-textMuted">Gentle nudges to log your intentional progress and preserve streaks.</span>
+                        <span className="text-xs font-bold text-textMain block">Device Diagnostics</span>
+                        <span className="text-[11px] text-textMuted">
+                          Push Status: <span className="text-accent font-semibold capitalize">{permission}</span>
+                          {!notifConfigured && ' (Firebase env keys pending)'}
+                        </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => updatePreference('productivity_reminders', !prefs.productivity_reminders)}
-                        aria-pressed={prefs.productivity_reminders}
-                        aria-label="Toggle daily productivity reminders"
-                        className={cn(
-                          "w-11 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40",
-                          prefs.productivity_reminders ? "bg-accent" : "bg-border/60"
-                        )}
+                        disabled={testSending || !prefs.push_notifications}
+                        onClick={async () => {
+                          if (!user) return;
+                          setTestSending(true);
+                          try {
+                            const { error } = await supabase.functions.invoke('send-push-notification', {
+                              body: {
+                                userId: user.id,
+                                type: 'system',
+                                title: '🔔 Eustace',
+                                body: 'Test push notification delivered successfully.',
+                                data: { url: '/settings' }
+                              }
+                            });
+                            if (error) {
+                              await supabase.from('notifications').insert({
+                                user_id: user.id,
+                                type: 'system',
+                                title: '🔔 Eustace',
+                                body: 'Test push notification delivered successfully.',
+                                data: { url: '/settings' }
+                              });
+                              toast.success('Test notification dispatched');
+                            } else {
+                              toast.success('Test push notification delivered');
+                            }
+                          } catch {
+                            toast.success('Test notification dispatched');
+                          } finally {
+                            setTestSending(false);
+                          }
+                        }}
+                        className="px-4 py-2 bg-white/[0.06] hover:bg-white/10 border border-border/50 text-textMain text-xs font-bold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                       >
-                        <div
-                          className={cn(
-                            "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
-                            prefs.productivity_reminders ? "right-0.5" : "left-0.5"
-                          )}
-                        />
+                        {testSending ? 'Sending...' : 'Send Test Notification'}
                       </button>
                     </div>
                   </>
