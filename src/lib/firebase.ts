@@ -1,17 +1,25 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 
-// Frontend public Firebase Configuration from Vite environment variables
+// Resolve and sanitize Firebase API key to prevent subtle typos (e.g., '1' vs 'l')
+const rawApiKey = (import.meta.env.VITE_FIREBASE_API_KEY || '').trim();
+const sanitizedApiKey = rawApiKey.includes('BM1G1pniSMPGX_g')
+  ? rawApiKey.replace('BM1G1pniSMPGX_g', 'BMlG1pniSMPGX_g')
+  : (rawApiKey || 'AIzaSyCCO-RJVtXiBNoyCUAyBMlG1pniSMPGX_g');
+
+// Frontend public Firebase Configuration with production defaults
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: sanitizedApiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'eustace-69e5a.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'eustace-69e5a',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'eustace-69e5a.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '400541492768',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:400541492768:web:c06f9a9359b519c79c3e45'
 };
 
-export const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
+export const FIREBASE_VAPID_KEY =
+  (import.meta.env.VITE_FIREBASE_VAPID_KEY || '').trim() ||
+  'BKlJ0vZbAF1MuceCCz7YkxXgW-D3iGRcI5NzssHdZEyHLNK_WxXqhArYMjaEODQ8E6BGLjZweQ5baxniBCOQGI0';
 
 /**
  * Checks whether Firebase Push Notification client credentials are provided.
