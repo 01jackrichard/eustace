@@ -1,7 +1,6 @@
 import {
-  register,
-  unregister,
-  onRegistered,
+  getToken,
+  deleteToken,
   onMessage,
   type MessagePayload
 } from 'firebase/messaging';
@@ -104,7 +103,7 @@ export const notificationService = {
   },
 
   /**
-   * Register this device with FCM via modern Firebase Installation ID (FID)
+   * Register this device with FCM via standard Web Push registration token
    */
   async registerDevice(userId: string): Promise<boolean> {
     if (!userId || !this.isPushSupported() || !isFirebaseConfigured()) return false;
@@ -116,59 +115,32 @@ export const notificationService = {
       const swRegistration = await this.getServiceWorkerRegistration();
       if (!swRegistration) return false;
 
-      return new Promise<boolean>((resolve) => {
-        let isSettled = false;
-
-        // Firebase requires onRegistered to be attached before calling register()
-        const unsub = onRegistered(messaging, async (fid: string) => {
-          try {
-            unsub();
-            if (!fid) {
-              if (!isSettled) { isSettled = true; resolve(false); }
-              return;
-            }
-
-            const { error } = await supabase.rpc('register_notification_device', {
-              p_fcm_token: fid,
-              p_device_type: getDeviceType(),
-              p_device_name: getDeviceName(),
-              p_token_type: 'fid'
-            });
-
-            if (error) {
-              console.warn('[Eustace Notifications] Failed to store device in database:', error);
-              if (!isSettled) { isSettled = true; resolve(false); }
-            } else {
-              localStorage.setItem(FCM_TOKEN_STORAGE_KEY, fid);
-              if (!isSettled) { isSettled = true; resolve(true); }
-            }
-          } catch (err) {
-            console.warn('[Eustace Notifications] Error registering device in onRegistered:', err);
-            if (!isSettled) { isSettled = true; resolve(false); }
-          }
-        });
-
-        // Trigger FID registration with VAPID key and Service Worker registration
-        register(messaging, {
-          vapidKey: FIREBASE_VAPID_KEY,
-          serviceWorkerRegistration: swRegistration
-        }).catch((err) => {
-          console.warn('[Eustace Notifications] register() rejected:', err);
-          unsub();
-          if (!isSettled) { isSettled = true; resolve(false); }
-        });
-
-        // Timeout safety fallback
-        setTimeout(() => {
-          if (!isSettled) {
-            isSettled = true;
-            unsub();
-            resolve(false);
-          }
-        }, 8000);
+      const token = await getToken(messaging, {
+        vapidKey: FIREBASE_VAPID_KEY,
+        serviceWorkerRegistration: swRegistration
       });
+
+      if (!token) {
+        console.warn('[Eustace Notifications] No FCM token returned by getToken()');
+        return false;
+      }
+
+      const { error } = await supabase.rpc('register_notification_device', {
+        p_fcm_token: token,
+        p_device_type: getDeviceType(),
+        p_device_name: getDeviceName(),
+        p_token_type: 'token'
+      });
+
+      if (error) {
+        console.warn('[Eustace Notifications] Failed to store device in database:', error);
+        return false;
+      }
+
+      localStorage.setItem(FCM_TOKEN_STORAGE_KEY, token);
+      return true;
     } catch (err) {
-      console.warn('[Eustace Notifications] Error registering device:', err);
+      console.warn('[Eustace Notifications] Error registering device with FCM:', err);
       return false;
     }
   },
@@ -184,10 +156,10 @@ export const notificationService = {
 
     try {
       if (messaging) {
-        await unregister(messaging);
+        await deleteToken(messaging);
       }
     } catch (err) {
-      console.warn('[Eustace Notifications] Error calling unregister():', err);
+      console.warn('[Eustace Notifications] Error calling deleteToken():', err);
     }
 
     if (token) {
@@ -195,12 +167,10 @@ export const notificationService = {
         await supabase.rpc('unregister_notification_device', {
           p_fcm_token: token
         });
-        localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
-        return true;
       } catch (err) {
         console.warn('[Eustace Notifications] Error deactivating device token:', err);
-        return false;
       }
+      localStorage.removeItem(FCM_TOKEN_STORAGE_KEY);
     }
     return true;
   },

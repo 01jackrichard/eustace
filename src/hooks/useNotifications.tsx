@@ -23,10 +23,21 @@ export function useNotifications() {
   useEffect(() => {
     if (user) {
       loadNotifications();
+
+      // Check current browser permission dynamically
+      const currentPerm = notificationService.getPermissionState();
+      setPermission(currentPerm);
+
+      // Auto-register/refresh device token if permission is already granted
+      if (currentPerm === 'granted' && isConfigured && isSupported) {
+        notificationService.registerDevice(user.id).catch((err) => {
+          console.warn('[Eustace Notifications] Auto-registration error:', err);
+        });
+      }
     } else {
       setNotifications([]);
     }
-  }, [user, loadNotifications]);
+  }, [user, isConfigured, isSupported, loadNotifications]);
 
   // Synchronize foreground listener when user is logged in and permission granted
   useEffect(() => {

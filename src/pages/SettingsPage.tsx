@@ -662,7 +662,7 @@ export function SettingsPage() {
                         type="button"
                         disabled={notifLoading || !notifSupported}
                         onClick={async () => {
-                          if (prefs.push_notifications) {
+                          if (prefs.push_notifications && permission === 'granted') {
                             await disablePushNotifications();
                             updatePreference('push_notifications', false);
                           } else {
@@ -672,18 +672,18 @@ export function SettingsPage() {
                             }
                           }
                         }}
-                        aria-pressed={prefs.push_notifications}
+                        aria-pressed={prefs.push_notifications && permission === 'granted'}
                         aria-label="Toggle push notifications"
                         className={cn(
                           "w-12 h-6 rounded-full relative transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0",
-                          prefs.push_notifications ? "bg-accent" : "bg-border/60",
+                          (prefs.push_notifications && permission === 'granted') ? "bg-accent" : "bg-border/60",
                           (notifLoading || !notifSupported) && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         <div
                           className={cn(
                             "w-5 h-5 bg-background rounded-full absolute top-0.5 transition-transform duration-200 shadow-sm",
-                            prefs.push_notifications ? "right-0.5" : "left-0.5"
+                            (prefs.push_notifications && permission === 'granted') ? "right-0.5" : "left-0.5"
                           )}
                         />
                       </button>
@@ -881,7 +881,18 @@ export function SettingsPage() {
                           if (!user) return;
                           setTestSending(true);
                           try {
-                            const { error } = await supabase.functions.invoke('send-push-notification', {
+                            // Ensure device is registered before dispatching test
+                            if (permission !== 'granted') {
+                              const granted = await requestPermissionAndEnable();
+                              if (!granted) {
+                                setTestSending(false);
+                                return;
+                              }
+                            } else {
+                              await notificationService.registerDevice(user.id);
+                            }
+
+                            const { data: resData, error } = await supabase.functions.invoke('send-push-notification', {
                               body: {
                                 userId: user.id,
                                 type: 'system',
@@ -890,20 +901,17 @@ export function SettingsPage() {
                                 data: { url: '/settings' }
                               }
                             });
+
                             if (error) {
-                              await supabase.from('notifications').insert({
-                                user_id: user.id,
-                                type: 'system',
-                                title: '🔔 Eustace',
-                                body: 'Test push notification delivered successfully.',
-                                data: { url: '/settings' }
-                              });
-                              toast.success('Test notification dispatched');
+                              toast.error('Failed to dispatch test notification');
+                            } else if (resData?.deliveredDevices === 0) {
+                              toast.error('Device token not active. Please tap the Push switch off and on.');
                             } else {
-                              toast.success('Test push notification delivered');
+                              toast.success(`Test push notification delivered to ${resData?.deliveredDevices || 1} device(s)!`);
                             }
-                          } catch {
-                            toast.success('Test notification dispatched');
+                          } catch (err: any) {
+                            console.error('[Send Test Notification] Error:', err);
+                            toast.error('Error dispatching test notification');
                           } finally {
                             setTestSending(false);
                           }
