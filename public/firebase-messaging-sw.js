@@ -71,9 +71,27 @@ self.addEventListener('push', (event) => {
     requireInteraction: false
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+  const notifyPromise = self.registration.showNotification(title, options);
+
+  // Broadcast push notification to all open clients/tabs so foreground listeners can display instant toasts
+  const broadcastPromise = self.clients
+    .matchAll({ type: 'window', includeUncontrolled: true })
+    .then((clientList) => {
+      for (const client of clientList) {
+        client.postMessage({
+          type: 'PUSH_NOTIFICATION',
+          title,
+          body,
+          url: targetUrl,
+          data: options.data
+        });
+      }
+    })
+    .catch((err) => {
+      console.warn('[Eustace SW] Error broadcasting push to clients:', err);
+    });
+
+  event.waitUntil(Promise.all([notifyPromise, broadcastPromise]));
 });
 
 // Notification Click Handler: Focus active window or open internal route
