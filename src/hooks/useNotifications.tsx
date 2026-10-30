@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { notificationService, type InAppNotification, type NotificationPermissionState } from '../services/notificationService';
@@ -6,10 +6,29 @@ import { isFirebaseConfigured } from '../lib/firebase';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
-export function useNotifications() {
+export interface NotificationContextType {
+  permission: NotificationPermissionState;
+  isSupported: boolean;
+  isConfigured: boolean;
+  loading: boolean;
+  notifications: InAppNotification[];
+  unreadCount: number;
+  requestPermissionAndEnable: () => Promise<boolean>;
+  disablePushNotifications: () => Promise<boolean>;
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
+}
+
+const NotificationContext = createContext<NotificationContextType | null>(null);
+
+export function NotificationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const locationRef = useRef(location.pathname);
+  locationRef.current = location.pathname;
+
   const toastedIdsRef = useRef<Map<string, number>>(new Map());
 
   const [permission, setPermission] = useState<NotificationPermissionState>(() =>
@@ -43,7 +62,7 @@ export function useNotifications() {
     }
 
     // If currently on the exact same conversation or target URL, skip foreground toast
-    if (url && location.pathname === url) {
+    if (url && locationRef.current === url) {
       return;
     }
 
@@ -67,7 +86,7 @@ export function useNotifications() {
         position: 'top-right'
       }
     );
-  }, [location.pathname, navigate]);
+  }, [navigate]);
 
   useEffect(() => {
     if (user) {
@@ -92,35 +111,49 @@ export function useNotifications() {
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel(`user_notifications_${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          const newNotif = payload.new as InAppNotification;
-          if (newNotif) {
-            showToast(
-              newNotif.title,
-              newNotif.body,
-              newNotif.data?.url,
-              newNotif.id
-            );
-            loadNotifications();
+    // Use a unique channel name per session to prevent any collision across HMR or lifecycle mounts
+    const channelName = `user_notifications_${user.id}_${Math.random().toString(36).substring(2, 9)}`;
+    let channel: any = null;
+
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            const newNotif = payload.new as InAppNotification;
+            if (newNotif) {
+              showToast(
+                newNotif.title,
+                newNotif.body,
+                newNotif.data?.url,
+                newNotif.id
+              );
+              loadNotifications();
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('[Eustace Notifications] Supabase realtime subscription error:', err);
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (err) {
+          console.warn('[Eustace Notifications] Error removing channel:', err);
+        }
+      }
     };
-  }, [user, showToast, loadNotifications]);
+  }, [user?.id, showToast, loadNotifications]);
 
   // 2. Service Worker push broadcast listener (for Web Push arriving while tab is open)
   useEffect(() => {
@@ -237,7 +270,7 @@ export function useNotifications() {
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
-  return {
+  const contextValue: NotificationContextType = {
     permission,
     isSupported,
     isConfigured,
@@ -249,5 +282,31 @@ export function useNotifications() {
     markAsRead,
     markAllAsRead,
     refreshNotifications: loadNotifications
+  };
+
+  return (
+    <NotificationContext.Provider value={contextValue}>
+      {children}
+    </NotificationContext.Provider>
+  );
+}
+
+export function useNotifications(): NotificationContextType {
+  const context = useContext(NotificationContext);
+  if (context) return context;
+
+  // Safe fallback if called outside of NotificationProvider
+  return {
+    permission: notificationService.getPermissionState(),
+    isSupported: notificationService.isPushSupported(),
+    isConfigured: isFirebaseConfigured(),
+    loading: false,
+    notifications: [],
+    unreadCount: 0,
+    requestPermissionAndEnable: async () => false,
+    disablePushNotifications: async () => false,
+    markAsRead: async () => {},
+    markAllAsRead: async () => {},
+    refreshNotifications: async () => {}
   };
 }

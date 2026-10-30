@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, type ComponentType } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { ProtectedLayout } from './components/Layout';
+import { NotificationProvider } from './hooks/useNotifications';
 import { Toaster } from 'react-hot-toast';
 import { PWAReloadPrompt } from './components/PWAReloadPrompt';
 import { InstallPrompt } from './components/InstallPrompt';
@@ -111,6 +112,7 @@ function App() {
   useDynamicDocumentTitle();
   return (
     <ErrorBoundary>
+      <NotificationProvider>
       <Toaster position="bottom-center" toastOptions={{
         style: { background: '#1c1c1c', color: '#fff', border: '1px solid #333' }
       }} />
@@ -147,6 +149,7 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
+      </NotificationProvider>
     </ErrorBoundary>
   );
 }
