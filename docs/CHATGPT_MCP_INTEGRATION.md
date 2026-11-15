@@ -42,14 +42,14 @@ These steps intentionally have not been performed.
 2. Enable dynamic client registration, and retain the explicit authorization/consent screen. Dynamic registration can allow compatible clients to register; user approval is still required.
 3. Configure the OAuth authorization URL path as `/oauth/consent` and set the Auth Site URL to the public HTTPS origin that serves this Eustace frontend.
 4. Confirm the project's JWT signing keys use an asymmetric algorithm supported by the current Supabase server middleware (ES256 or RS256). The middleware validates user access tokens using the project's JWKS.
-5. In the repository's `supabase/config.toml`, add the function setting below without overwriting any existing project configuration:
+5. This feature branch adds a minimal `supabase/config.toml` with local project ID `eustace` and this function setting:
 
    ```toml
    [functions.eustace-mcp]
    verify_jwt = false
    ```
 
-   This lets OAuth discovery reach the function before a user token exists. The function itself still verifies the OAuth bearer token with Supabase middleware. Do not disable authentication in the function handler.
+   This lets OAuth discovery reach the function before a user token exists. The function itself still verifies the OAuth bearer token with Supabase middleware. Do not disable authentication in the function handler. The existing repository did not previously contain a Supabase CLI config file; review this new file before using the CLI.
 
 6. Set the server-side secrets for the production Eustace owner:
 
@@ -59,13 +59,14 @@ These steps intentionally have not been performed.
 
    Obtain the UUID from the Eustace account's Supabase Auth user record. Do not use a username or email in place of the UUID. The time zone is set to `Asia/Kolkata` for this personal integration.
 
-7. After reviewing the source and the required Supabase Auth settings, deploy only the MCP Edge Function:
+7. Link the local repository to the existing Eustace project, then deploy only the MCP Edge Function:
 
    ```bash
+   supabase link --project-ref ghlsmrkjmqerexqclago
    supabase functions deploy eustace-mcp --project-ref ghlsmrkjmqerexqclago
    ```
 
-   No database migration is part of this deployment.
+   Do not run `supabase db push`, `supabase migration up`, or `supabase config push` as part of this feature's initial deployment. OAuth Server settings are a separate, explicit setup step. No database migration is part of this deployment.
 
 ## Connect from ChatGPT
 
@@ -94,7 +95,7 @@ OpenAI's current documentation lists full custom MCP support, including write/mo
 - [ ] Update the test task and verify the changed fields in Eustace.
 - [ ] Complete a test task scheduled for the current owner-local date.
 - [ ] Delete only the test task and verify its completion row cascades as expected.
-- [ ] Run the app's normal build, lint, and tests before merge.
+- [ ] Run the app's normal build, lint, and tests before merge. CI also runs `deno check` against the new Edge Function.
 
 ## Security notes
 
