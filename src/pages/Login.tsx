@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 function getSafeReturnPath(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\\\')) return '/dashboard';
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
   try {
     const target = new URL(value, window.location.origin);
     return target.origin === window.location.origin ? target.pathname + target.search + target.hash : '/dashboard';
