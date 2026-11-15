@@ -37,7 +37,7 @@ export function OAuthConsentPage() {
     }
 
     if (!authorizationId) {
-      setError('The authorization request is missing its ID. Return to ChatGPT and try connecting again.');
+      setError('The authorization request is missing its ID. Return to your application and try connecting again.');
       setLoading(false);
       return;
     }
@@ -100,7 +100,7 @@ export function OAuthConsentPage() {
     window.location.assign(result.data.redirect_url);
   };
 
-  const clientName = details?.client?.name || 'ChatGPT';
+  const clientName = details?.client?.name || 'Antigravity / AI Client';
   const scopes = (details?.scope || '').split(' ').filter(Boolean);
 
   return (
@@ -211,7 +211,7 @@ export function OAuthConsentPage() {
               </div>
 
               <p className="text-center text-[11px] leading-5 text-textMuted">
-                You can remove this connection later from ChatGPT’s app settings. The OAuth grant can also be revoked through Supabase Auth’s grant-management controls.
+                You can remove this connection later from your application settings. The OAuth grant can also be revoked through Supabase Auth’s grant-management controls.
               </p>
             </>
           )}

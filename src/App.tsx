@@ -93,7 +93,7 @@ function useDynamicDocumentTitle() {
     } else if (pathname.startsWith('/u/')) {
       title = 'Public Profile — Eustace';
     } else if (pathname === '/oauth/consent') {
-      title = 'Connect ChatGPT — Eustace';
+      title = 'Connect Application — Eustace';
     } else if (pathname === '/login') {
       title = 'Log In — Eustace';
     } else if (pathname === '/signup') {

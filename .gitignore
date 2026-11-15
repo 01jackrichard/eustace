@@ -28,5 +28,6 @@ dist-ssr
 *.sw?
 
 archive/
+.agents/
 # Supabase CLI temporary directory
 supabase/.temp/

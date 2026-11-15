@@ -1,4 +1,4 @@
-// Eustace personal ChatGPT MCP integration.
+// Eustace personal ChatGPT & Antigravity MCP integration.
 // All database requests use the authenticated user's Supabase client and existing RLS policies.
 // This function intentionally does not use the service-role key.
 
@@ -9,129 +9,19 @@ import { pipeline } from 'npm:@supabase/middleware@1'
 import { withOAuthProtectedResource, withSupabase } from 'npm:@supabase/server@1'
 import { z } from 'npm:zod@^4.3.6'
 
-type Recurrence = 'none' | 'daily' | 'weekdays' | 'weekly'
-
-type TaskMetadata = {
-  notes?: string
-  startDate?: string
-  endDate?: string
-  startTime?: string
-  skippedDates?: string[]
-  icon?: string
-  rrule?: string
-  [key: string]: unknown
-}
-
-type TaskRow = {
-  id: string
-  name: string
-  category: string | null
-  duration: string | null
-  recurring: Recurrence
-  created_at: string
-  description: string | null
-  updated_at?: string
-}
-
-const TASK_COLUMNS = 'id,name,category,duration,recurring,created_at,description,updated_at'
-
-function isValidDateString(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
-  const parsed = new Date(value + 'T00:00:00.000Z')
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
-}
-
-function isValidTimeString(value: string): boolean {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
-}
-
-function isValidTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: value })
-    return true
-  } catch {
-    return false
-  }
-}
-
-function localDateInTimeZone(timeZone: string, instant = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(instant)
-
-  const year = parts.find((part) => part.type === 'year')?.value
-  const month = parts.find((part) => part.type === 'month')?.value
-  const day = parts.find((part) => part.type === 'day')?.value
-  if (!year || !month || !day) throw new Error('Could not determine the account-local date.')
-  return [year, month, day].join('-')
-}
-
-function weekdayOf(dateString: string): number {
-  return new Date(dateString + 'T00:00:00.000Z').getUTCDay()
-}
-
-function daysInMonth(year: number, monthOneBased: number): number {
-  return new Date(Date.UTC(year, monthOneBased, 0)).getUTCDate()
-}
-
-function parseMetadata(description: string | null): TaskMetadata {
-  if (!description) return {}
-  try {
-    const parsed: unknown = JSON.parse(description)
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as TaskMetadata
-    }
-  } catch {
-    // Legacy descriptions that are not JSON are not treated as task metadata.
-  }
-  return {}
-}
-
-function taskOccursOnDate(task: TaskRow, dateString: string): boolean {
-  const metadata = parseMetadata(task.description)
-  const startDate = isValidDateString(metadata.startDate || '')
-    ? metadata.startDate as string
-    : task.created_at.slice(0, 10)
-
-  if (dateString < startDate) return false
-  if (metadata.endDate && isValidDateString(metadata.endDate) && dateString > metadata.endDate) return false
-  if (Array.isArray(metadata.skippedDates) && metadata.skippedDates.includes(dateString)) return false
-
-  switch (task.recurring) {
-    case 'none':
-      return task.created_at.slice(0, 10) === dateString
-    case 'daily':
-      return true
-    case 'weekdays': {
-      const weekday = weekdayOf(dateString)
-      return weekday >= 1 && weekday <= 5
-    }
-    case 'weekly':
-      return weekdayOf(startDate) === weekdayOf(dateString)
-    default:
-      return false
-  }
-}
-
-function presentTask(task: TaskRow, completed: boolean) {
-  const metadata = parseMetadata(task.description)
-  return {
-    id: task.id,
-    title: task.name,
-    category: task.category,
-    duration: task.duration,
-    scheduledDate: metadata.startDate || task.created_at.slice(0, 10),
-    recurrence: task.recurring,
-    recurrenceEndDate: metadata.endDate || null,
-    startTime: metadata.startTime || null,
-    notes: metadata.notes || null,
-    icon: metadata.icon || null,
-    completed,
-  }
-}
+import {
+  TASK_COLUMNS,
+  isValidDateString,
+  isValidTimeZone,
+  localDateInTimeZone,
+  normalizeTimeString,
+  parseMetadata,
+  presentTask,
+  sortTasksChronologically,
+  taskOccursOnDate,
+  type TaskMetadata,
+  type TaskRow,
+} from './taskLogic.ts'
 
 function toolResult(value: unknown) {
   return {
@@ -140,23 +30,58 @@ function toolResult(value: unknown) {
 }
 
 const dateSchema = z.string().refine(isValidDateString, 'Use a real date in YYYY-MM-DD format.')
-const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24-hour HH:mm time.')
+
+const timeSchema = z.string().transform((val, ctx) => {
+  const norm = normalizeTimeString(val)
+  if (!norm) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Use 24-hour HH:mm or 12-hour h:mm A time format.' })
+    return z.NEVER
+  }
+  return norm
+})
 
 const recurrenceSchema = z.enum(['none', 'daily', 'weekdays', 'weekly'])
+
+/**
+ * Safely fetches rows from a Supabase query with pagination.
+ * Ensures that table row counts exceeding PostgREST's default max limit
+ * are completely retrieved rather than truncated.
+ */
+async function fetchPaginatedTasks(
+  queryBuilder: (from: number, to: number) => Promise<{ data: any; error: any }>,
+  maxRows = 5000,
+): Promise<TaskRow[]> {
+  const PAGE_SIZE = 500
+  const results: TaskRow[] = []
+  let from = 0
+
+  while (results.length < maxRows) {
+    const to = from + PAGE_SIZE - 1
+    const { data, error } = await queryBuilder(from, to)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    results.push(...(data as TaskRow[]))
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+
+  return results
+}
 
 Deno.serve(
   pipeline(
     // Discovery must run before authentication so an MCP client can find Supabase Auth.
     // withSupabase verifies the OAuth token and creates an RLS-scoped client.
     [withOAuthProtectedResource(), withSupabase({ auth: 'user' })],
-    async (_req, { supabase, userClaims }) => {
+    async (_req, { supabase, userClaims, jwtClaims }) => {
       const ownerUserId = Deno.env.get('EUSTACE_OWNER_USER_ID') || ''
       const ownerTimeZone = Deno.env.get('EUSTACE_OWNER_TIME_ZONE') || ''
 
       if (!ownerUserId || !ownerTimeZone || !isValidTimeZone(ownerTimeZone)) {
         return Response.json(
           {
-            error: 'Eustace MCP is not configured. Set EUSTACE_OWNER_USER_ID and a valid EUSTACE_OWNER_TIME_ZONE before enabling this endpoint.',
+            error:
+              'Eustace MCP is not configured. Set EUSTACE_OWNER_USER_ID and a valid EUSTACE_OWNER_TIME_ZONE before enabling this endpoint.',
           },
           { status: 503 },
         )
@@ -165,7 +90,10 @@ Deno.serve(
       // withSupabase has already verified the bearer token and provides its
       // verified claims. Use the JWT subject as the caller identity; never
       // accept a user ID supplied by an MCP tool argument.
-      const userId = typeof userClaims?.id === 'string' ? userClaims.id : ''
+      const userId =
+        (typeof userClaims?.id === 'string' ? userClaims.id : '') ||
+        (typeof (userClaims as any)?.sub === 'string' ? (userClaims as any).sub : '') ||
+        (typeof jwtClaims?.sub === 'string' ? jwtClaims.sub : '')
 
       if (!userId) {
         return Response.json({ error: 'A valid Eustace sign-in is required.' }, { status: 401 })
@@ -205,6 +133,11 @@ Deno.serve(
           },
           async ({ title, date, category, duration, notes, start_time, recurrence, end_date }) => {
             const scheduledDate = date || today
+
+            if (recurrence === 'none' && end_date) {
+              throw new Error('A non-recurring task cannot have a recurrence end date.')
+            }
+
             if (end_date && end_date < scheduledDate) {
               throw new Error('The recurrence end date cannot be earlier than the scheduled start date.')
             }
@@ -243,7 +176,7 @@ Deno.serve(
           {
             title: 'View Eustace tasks',
             description:
-              'List tasks scheduled for a date in the owner’s Eustace account. Defaults to the owner’s current local date. Recurring occurrences and skipped dates follow Eustace task metadata. Returns completion status for the requested date.',
+              'List tasks scheduled for a date in the owner’s Eustace account. Defaults to the owner’s current local date. Safely aggregates both recurring task definitions and date-specific tasks across pagination boundaries without omitting older recurring items. Returns completion status for the requested date.',
             inputSchema: z.object({
               date: dateSchema.optional(),
               limit: z.number().int().min(1).max(200).default(100),
@@ -252,15 +185,59 @@ Deno.serve(
           },
           async ({ date, limit }) => {
             const requestedDate = date || today
-            const { data: taskRows, error: taskError } = await db
-              .from('tasks')
-              .select(TASK_COLUMNS)
-              .eq('user_id', userId)
-              .order('created_at', { ascending: false })
-              .limit(limit)
 
-            if (taskError) throw new Error('Could not load Eustace tasks: ' + taskError.message)
+            // 1. Fetch recurring tasks (recurring != 'none') with pagination so older
+            // recurring tasks are never pushed out by newer rows.
+            let recurringTasks: TaskRow[] = []
+            try {
+              recurringTasks = await fetchPaginatedTasks((from, to) =>
+                db
+                  .from('tasks')
+                  .select(TASK_COLUMNS)
+                  .eq('user_id', userId)
+                  .neq('recurring', 'none')
+                  .order('created_at', { ascending: false })
+                  .range(from, to),
+              )
+            } catch (err: any) {
+              throw new Error('Could not load recurring Eustace tasks: ' + err.message)
+            }
 
+            // 2. Fetch one-off tasks (recurring = 'none') scheduled for requestedDate.
+            let oneOffTasks: TaskRow[] = []
+            try {
+              oneOffTasks = await fetchPaginatedTasks((from, to) =>
+                db
+                  .from('tasks')
+                  .select(TASK_COLUMNS)
+                  .eq('user_id', userId)
+                  .eq('recurring', 'none')
+                  .eq('created_at', requestedDate)
+                  .order('created_at', { ascending: false })
+                  .range(from, to),
+              )
+            } catch (err: any) {
+              throw new Error('Could not load scheduled Eustace tasks: ' + err.message)
+            }
+
+            // 3. Fallback: check for any one-off task whose description JSON holds
+            // startDate = requestedDate in case created_at differed.
+            let legacyMismatchTasks: TaskRow[] = []
+            try {
+              const { data: mismatchData } = await db
+                .from('tasks')
+                .select(TASK_COLUMNS)
+                .eq('user_id', userId)
+                .eq('recurring', 'none')
+                .neq('created_at', requestedDate)
+                .ilike('description', `%"startDate":"${requestedDate}"%`)
+                .limit(200)
+              if (mismatchData) legacyMismatchTasks = mismatchData as TaskRow[]
+            } catch {
+              // Non-critical fallback
+            }
+
+            // 4. Fetch completion status for the requested date.
             const { data: completionRows, error: completionError } = await db
               .from('task_completions')
               .select('task_id')
@@ -270,14 +247,29 @@ Deno.serve(
             if (completionError) throw new Error('Could not load task completion status: ' + completionError.message)
 
             const completedIds = new Set((completionRows || []).map((row: { task_id: string }) => row.task_id))
-            const scheduledTasks = ((taskRows || []) as TaskRow[])
-              .filter((task) => taskOccursOnDate(task, requestedDate))
-              .map((task) => presentTask(task, completedIds.has(task.id)))
+
+            // 5. Combine candidates, deduplicate by ID, and filter through occurrence rules.
+            const candidateMap = new Map<string, TaskRow>()
+            for (const task of [...oneOffTasks, ...legacyMismatchTasks, ...recurringTasks]) {
+              candidateMap.set(task.id, task)
+            }
+
+            const occurringTasks = Array.from(candidateMap.values()).filter((task) =>
+              taskOccursOnDate(task, requestedDate),
+            )
+
+            // 6. Sort tasks chronologically: timed items (00:00 - 23:59) first, then untimed.
+            const sortedTasks = sortTasksChronologically(occurringTasks)
+
+            // 7. Apply the requested limit to the finalized occurrences.
+            const paginatedTasks = sortedTasks.slice(0, limit)
+            const presented = paginatedTasks.map((task) => presentTask(task, completedIds.has(task.id)))
 
             return toolResult({
               date: requestedDate,
-              count: scheduledTasks.length,
-              tasks: scheduledTasks,
+              count: presented.length,
+              totalScheduled: sortedTasks.length,
+              tasks: presented,
             })
           },
         )
@@ -328,6 +320,11 @@ Deno.serve(
             const metadata = parseMetadata(task.description)
             const nextDate = date || (metadata.startDate as string | undefined) || task.created_at.slice(0, 10)
             const nextEndDate = end_date === undefined ? (metadata.endDate as string | undefined) : end_date || undefined
+            const targetRecurrence = recurrence !== undefined ? recurrence : task.recurring
+
+            if (targetRecurrence === 'none' && nextEndDate) {
+              throw new Error('A non-recurring task cannot have a recurrence end date.')
+            }
 
             if (nextEndDate && nextEndDate < nextDate) {
               throw new Error('The recurrence end date cannot be earlier than the scheduled start date.')
@@ -337,7 +334,12 @@ Deno.serve(
             if (title !== undefined) updates.name = title.trim()
             if (category !== undefined) updates.category = category?.trim() || null
             if (duration !== undefined) updates.duration = duration?.trim() || null
-            if (recurrence !== undefined) updates.recurring = recurrence
+            if (recurrence !== undefined) {
+              updates.recurring = recurrence
+              if (recurrence === 'none') {
+                delete metadata.endDate
+              }
+            }
             if (date !== undefined) {
               updates.created_at = date
               metadata.startDate = date
@@ -369,7 +371,8 @@ Deno.serve(
 
             return toolResult({
               success: true,
-              message: 'Task updated in Eustace. Recurring-task changes apply to the task definition, not a single occurrence.',
+              message:
+                'Task updated in Eustace. Recurring-task changes apply to the task definition, not a single occurrence.',
               task: presentTask(updated as TaskRow, false),
             })
           },
