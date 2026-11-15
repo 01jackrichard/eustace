@@ -149,7 +149,7 @@ Deno.serve(
     // Discovery must run before authentication so an MCP client can find Supabase Auth.
     // withSupabase verifies the OAuth token and creates an RLS-scoped client.
     [withOAuthProtectedResource(), withSupabase({ auth: 'user' })],
-    async (_req, { supabase }) => {
+    async (_req, { supabase, userClaims }) => {
       const ownerUserId = Deno.env.get('EUSTACE_OWNER_USER_ID') || ''
       const ownerTimeZone = Deno.env.get('EUSTACE_OWNER_TIME_ZONE') || ''
 
@@ -162,18 +162,18 @@ Deno.serve(
         )
       }
 
-      // The middleware already verifies the OAuth token; getUser supplies the
-      // server-confirmed identity used for the personal-account allowlist.
-      const { data: authData, error: authError } = await supabase.auth.getUser()
-      const user = authData?.user
+      // withSupabase has already verified the bearer token and provides its
+      // verified claims. Use the JWT subject as the caller identity; never
+      // accept a user ID supplied by an MCP tool argument.
+      const userId = typeof userClaims?.sub === 'string' ? userClaims.sub : ''
 
-      if (authError || !user) {
+      if (!userId) {
         return Response.json({ error: 'A valid Eustace sign-in is required.' }, { status: 401 })
       }
 
       // This integration is intentionally single-account, even though the OAuth
       // authorization server may support other Eustace users.
-      if (user.id !== ownerUserId) {
+      if (userId !== ownerUserId) {
         return Response.json({ error: 'This Eustace integration is not enabled for this account.' }, { status: 403 })
       }
 
@@ -217,7 +217,7 @@ Deno.serve(
             const { data, error } = await db
               .from('tasks')
               .insert({
-                user_id: user.id,
+                user_id: userId,
                 name: title.trim(),
                 category: category?.trim() || null,
                 duration: duration?.trim() || null,
@@ -255,7 +255,7 @@ Deno.serve(
             const { data: taskRows, error: taskError } = await db
               .from('tasks')
               .select(TASK_COLUMNS)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .order('created_at', { ascending: false })
               .limit(limit)
 
@@ -264,7 +264,7 @@ Deno.serve(
             const { data: completionRows, error: completionError } = await db
               .from('task_completions')
               .select('task_id')
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('completed_date', requestedDate)
 
             if (completionError) throw new Error('Could not load task completion status: ' + completionError.message)
@@ -318,7 +318,7 @@ Deno.serve(
               .from('tasks')
               .select(TASK_COLUMNS)
               .eq('id', task_id)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .maybeSingle()
 
             if (readError) throw new Error('Could not load the Eustace task: ' + readError.message)
@@ -361,7 +361,7 @@ Deno.serve(
               .from('tasks')
               .update(updates)
               .eq('id', task_id)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .select(TASK_COLUMNS)
               .single()
 
@@ -391,7 +391,7 @@ Deno.serve(
               .from('tasks')
               .select(TASK_COLUMNS)
               .eq('id', task_id)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .maybeSingle()
 
             if (taskError) throw new Error('Could not load the Eustace task: ' + taskError.message)
@@ -405,7 +405,7 @@ Deno.serve(
             const { data: existingCompletion, error: completionReadError } = await db
               .from('task_completions')
               .select('id')
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('task_id', task_id)
               .eq('completed_date', today)
               .maybeSingle()
@@ -426,7 +426,7 @@ Deno.serve(
             const { error: insertError } = await db
               .from('task_completions')
               .insert({
-                user_id: user.id,
+                user_id: userId,
                 task_id,
                 completed_date: today,
               })
@@ -460,7 +460,7 @@ Deno.serve(
               .from('tasks')
               .select(TASK_COLUMNS)
               .eq('id', task_id)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .maybeSingle()
 
             if (readError) throw new Error('Could not load the Eustace task: ' + readError.message)
@@ -470,7 +470,7 @@ Deno.serve(
               .from('tasks')
               .delete()
               .eq('id', task_id)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
 
             if (deleteError) throw new Error('Could not delete the Eustace task: ' + deleteError.message)
 
