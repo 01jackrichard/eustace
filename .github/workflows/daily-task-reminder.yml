@@ -39,4 +39,4 @@ jobs:
           EUSTACE_OWNER_TIME_ZONE: Asia/Kolkata
         run: |
           MODE="${{ github.event.inputs.mode || 'auto' }}"
-          deno run --allow-net --allow-env scripts/sendDailyTaskReminder.ts --mode=$MODE
+          deno run --node-modules-dir=auto --allow-net --allow-env scripts/sendDailyTaskReminder.ts --mode=$MODE
