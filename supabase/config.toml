@@ -1,0 +1,4 @@
+project_id = "eustace"
+
+[functions.eustace-mcp]
+verify_jwt = false
