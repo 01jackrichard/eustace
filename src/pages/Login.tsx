@@ -1,9 +1,19 @@
 import { SmoothInput } from '../components/ui/SmoothInput';
 import { useState } from 'react';
-import { useNavigate, Link, Navigate } from 'react-router-dom';
+import { useNavigate, Link, Navigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
+
+function getSafeReturnPath(value: string | null): string {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
+  try {
+    const target = new URL(value, window.location.origin);
+    return target.origin === window.location.origin ? target.pathname + target.search + target.hash : '/dashboard';
+  } catch {
+    return '/dashboard';
+  }
+}
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -13,9 +23,11 @@ export function Login() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = getSafeReturnPath(searchParams.get('redirect'));
   const { user } = useAuth();
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to={returnTo} replace />;
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
@@ -30,7 +42,7 @@ export function Login() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+        redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(returnTo)}`
       }
     });
     if (error) {
@@ -64,7 +76,7 @@ export function Login() {
         setError(error.message);
       }
     }
-    else navigate('/dashboard');
+    else navigate(returnTo, { replace: true });
 
     setLoading(false);
   };

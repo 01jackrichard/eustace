@@ -36,6 +36,7 @@ const Landing = safeLazy(() => import('./pages/Landing').then(m => ({ default: m
 const Login = safeLazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
 const Signup = safeLazy(() => import('./pages/Signup').then(m => ({ default: m.Signup })));
 const AuthCallback = safeLazy(() => import('./pages/AuthCallback').then(m => ({ default: m.AuthCallback })));
+const OAuthConsentPage = safeLazy(() => import('./pages/OAuthConsentPage').then(m => ({ default: m.OAuthConsentPage })));
 const Dashboard = safeLazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const CalendarPage = safeLazy(() => import('./pages/CalendarPage').then(m => ({ default: m.CalendarPage })));
 const TasksPage = safeLazy(() => import('./pages/TasksPage').then(m => ({ default: m.TasksPage })));
@@ -91,6 +92,8 @@ function useDynamicDocumentTitle() {
       title = 'Profile — Eustace';
     } else if (pathname.startsWith('/u/')) {
       title = 'Public Profile — Eustace';
+    } else if (pathname === '/oauth/consent') {
+      title = 'Connect Application — Eustace';
     } else if (pathname === '/login') {
       title = 'Log In — Eustace';
     } else if (pathname === '/signup') {
@@ -123,6 +126,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/oauth/consent" element={<OAuthConsentPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/privacy" element={<PrivacyPage />} />

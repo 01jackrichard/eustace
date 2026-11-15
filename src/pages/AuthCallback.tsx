@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
+function getSafeReturnPath(value: string | null): string {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
+  try {
+    const target = new URL(value, window.location.origin);
+    return target.origin === window.location.origin ? target.pathname + target.search + target.hash : '/dashboard';
+  } catch {
+    return '/dashboard';
+  }
+}
+
 export function AuthCallback() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = getSafeReturnPath(searchParams.get('redirect'));
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -18,7 +30,7 @@ export function AuthCallback() {
       if (!mounted) return;
       setStatus('success');
       redirectTimer = setTimeout(() => {
-        if (mounted) navigate('/dashboard', { replace: true });
+        if (mounted) navigate(returnTo, { replace: true });
       }, 800);
     };
 
@@ -68,7 +80,7 @@ export function AuthCallback() {
       if (timeoutId) clearTimeout(timeoutId);
       if (redirectTimer) clearTimeout(redirectTimer);
     };
-  }, [navigate]);
+  }, [navigate, returnTo]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background animate-fade-in">
