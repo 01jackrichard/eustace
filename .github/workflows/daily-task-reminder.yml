@@ -1,0 +1,42 @@
+name: Daily Eustace Task Reminder
+
+on:
+  schedule:
+    # 9:00 AM IST (3:30 AM UTC) - Morning reminder
+    - cron: '30 3 * * *'
+    # 8:00 PM IST (2:30 PM UTC) - Evening check-in
+    - cron: '30 14 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Reminder Mode'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - morning
+          - evening
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run Task Reminder
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          EUSTACE_OWNER_USER_ID: ${{ secrets.EUSTACE_OWNER_USER_ID }}
+          EUSTACE_OWNER_TIME_ZONE: Asia/Kolkata
+        run: |
+          MODE="${{ github.event.inputs.mode || 'auto' }}"
+          deno run --allow-net --allow-env scripts/sendDailyTaskReminder.ts --mode=$MODE
