@@ -51,7 +51,7 @@ These steps intentionally have not been performed.
 
    This lets OAuth discovery reach the function before a user token exists. The function itself still verifies the OAuth bearer token with Supabase middleware. Do not disable authentication in the function handler. The existing repository did not previously contain a Supabase CLI config file; review this new file before using the CLI.
 
-6. Set the server-side secrets for the production Eustace owner:
+8. Set the server-side secrets for the production Eustace owner:
 
    ```bash
    supabase secrets set --project-ref ghlsmrkjmqerexqclago EUSTACE_OWNER_USER_ID=<YOUR_AUTH_USER_UUID> EUSTACE_OWNER_TIME_ZONE=Asia/Kolkata
@@ -59,7 +59,7 @@ These steps intentionally have not been performed.
 
    Obtain the UUID from the Eustace account's Supabase Auth user record. Do not use a username or email in place of the UUID. The time zone is set to `Asia/Kolkata` for this personal integration.
 
-7. Link the local repository to the existing Eustace project, then deploy only the MCP Edge Function:
+9. Link the local repository to the existing Eustace project, then deploy only the MCP Edge Function:
 
    ```bash
    supabase link --project-ref ghlsmrkjmqerexqclago
@@ -87,6 +87,7 @@ OpenAI's current documentation lists full custom MCP support, including write/mo
 ## Testing checklist
 
 - [ ] Validate Supabase OAuth discovery and the OAuth consent page.
+- [ ] Confirm the OAuth discovery metadata advertises `offline_access` or equivalent refresh-token support accepted by ChatGPT.
 - [ ] Confirm the OAuth authorization returns a refresh token and that ChatGPT can renew it; ChatGPT's connector documentation calls out refresh-token requirements.
 - [ ] Confirm a non-owner Eustace account receives HTTP 403 from the MCP endpoint.
 - [ ] Confirm an unauthenticated MCP request receives an OAuth challenge.
