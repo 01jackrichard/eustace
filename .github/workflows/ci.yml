@@ -28,7 +28,7 @@ jobs:
         run: npm ci
 
       - name: Type-check Eustace MCP Edge Function
-        run: deno check supabase/functions/eustace-mcp/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/eustace-mcp/index.ts
 
       - name: Run linter
         run: npm run lint
