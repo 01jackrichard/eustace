@@ -198,7 +198,7 @@ export function OAuthConsentPage() {
               </div>
 
               <p className="text-center text-[11px] leading-5 text-textMuted">
-                You can revoke this application’s access later from your Eustace account’s connected-app permissions.
+                You can remove this connection later from ChatGPT’s app settings. The OAuth grant can also be revoked through Supabase Auth’s grant-management controls.
               </p>
             </>
           )}
