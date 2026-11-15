@@ -165,7 +165,7 @@ Deno.serve(
       // withSupabase has already verified the bearer token and provides its
       // verified claims. Use the JWT subject as the caller identity; never
       // accept a user ID supplied by an MCP tool argument.
-      const userId = typeof userClaims?.sub === 'string' ? userClaims.sub : ''
+      const userId = typeof userClaims?.id === 'string' ? userClaims.id : ''
 
       if (!userId) {
         return Response.json({ error: 'A valid Eustace sign-in is required.' }, { status: 401 })
@@ -221,7 +221,7 @@ Deno.serve(
                 name: title.trim(),
                 category: category?.trim() || null,
                 duration: duration?.trim() || null,
-                recurring,
+                recurring: recurrence,
                 created_at: scheduledDate,
                 description: JSON.stringify(metadata),
               })
