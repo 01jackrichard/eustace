@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 type AuthorizationDetails = {
+  authorization_id?: string;
+  redirect_url?: string;
   client?: {
     name?: string;
     uri?: string;
@@ -13,13 +15,6 @@ type AuthorizationDetails = {
   redirect_uri?: string;
   scope?: string;
 };
-
-function safeInternalRedirect(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) {
-    return '/dashboard';
-  }
-  return value;
-}
 
 export function OAuthConsentPage() {
   const [searchParams] = useSearchParams();
@@ -59,8 +54,19 @@ export function OAuthConsentPage() {
 
       if (detailsError) {
         setError(detailsError.message || 'Could not load the authorization request.');
+      } else if (!data) {
+        setError('No authorization details were returned for this request.');
       } else {
-        setDetails(data as AuthorizationDetails);
+        const authorization = data as AuthorizationDetails;
+
+        // Supabase returns a redirect response when this user has already
+        // authorized the client. No second consent screen is needed.
+        if (!authorization.authorization_id && authorization.redirect_url) {
+          window.location.assign(authorization.redirect_url);
+          return;
+        }
+
+        setDetails(authorization);
       }
       setLoading(false);
     }
@@ -144,6 +150,13 @@ export function OAuthConsentPage() {
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">Signed in as</p>
                 <p className="mt-1 break-all text-sm font-semibold text-textMain">{user?.email || 'Your Eustace account'}</p>
               </div>
+
+              {details?.redirect_uri && (
+                <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">Application redirect</p>
+                  <p className="mt-1 break-all text-xs text-textMuted">{details.redirect_uri}</p>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">Requested access</p>
